@@ -1,0 +1,12 @@
+version: "1"
+rules:                      # Array of rules
+  - base: api-8            # Required. Target branch
+    upstream: SpongePowered:api-8    # Required. Must be in the same fork network.
+    assignees:              # Optional
+      - Gizmo0320
+    reviewers:              # Optional
+      - Gizmo0320
+    conflictReviewers:      # Optional, on merge conflict assign a reviewer
+      - Gizmo0320
+label: ":arrow_heading_down: pull"  # Optional
+conflictLabel: "merge-conflict"     # Optional, on merge conflict assign a custom label, Default: merge-conflict
