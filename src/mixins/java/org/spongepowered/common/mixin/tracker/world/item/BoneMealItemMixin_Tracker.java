@@ -24,12 +24,18 @@
  */
 package org.spongepowered.common.mixin.tracker.world.item;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.BoneMealItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.BonemealableBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.spongepowered.api.event.block.ChangeBlockEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.common.bridge.world.WorldBridge;
+import org.spongepowered.common.bridge.world.level.LevelBridge;
 import org.spongepowered.common.event.ShouldFire;
 import org.spongepowered.common.event.tracking.PhaseContext;
 import org.spongepowered.common.event.tracking.PhaseTracker;
@@ -37,12 +43,6 @@ import org.spongepowered.common.event.tracking.phase.block.BlockPhase;
 import org.spongepowered.common.event.tracking.phase.block.GrowablePhaseContext;
 
 import java.util.Random;
-import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.BoneMealItem;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.BonemealableBlock;
-import net.minecraft.world.level.block.state.BlockState;
 
 @Mixin(BoneMealItem.class)
 public abstract class BoneMealItemMixin_Tracker {
@@ -71,9 +71,11 @@ public abstract class BoneMealItemMixin_Tracker {
         // Even though we're in a group, expecting this to succeed in forge environments will not work since there is a different mixin
         expect = 0
     )
-    private static void tracker$wrapGrowWithPhaseEntry(BonemealableBlock iGrowable, ServerLevel worldIn, Random rand, BlockPos pos, BlockState state,
-            ItemStack stack) {
-        if (((WorldBridge) worldIn).bridge$isFake() || !ShouldFire.CHANGE_BLOCK_EVENT_ALL) {
+    private static void tracker$wrapGrowWithPhaseEntry(
+        final BonemealableBlock iGrowable, final ServerLevel worldIn, final Random rand, final BlockPos pos,
+        final BlockState state, final ItemStack stack
+    ) {
+        if (((LevelBridge) worldIn).bridge$isFake() || !ShouldFire.CHANGE_BLOCK_EVENT_ALL) {
             iGrowable.performBonemeal(worldIn, rand, pos, state);
             return;
         }
@@ -82,7 +84,7 @@ public abstract class BoneMealItemMixin_Tracker {
         final boolean doesEvent = current.doesBlockEventTracking();
         if (doesEvent) {
             // We can enter the new phase state.
-            try (GrowablePhaseContext context = BlockPhase.State.GROWING.createPhaseContext(PhaseTracker.SERVER)
+            try (final GrowablePhaseContext context = BlockPhase.State.GROWING.createPhaseContext(PhaseTracker.SERVER)
                 .provideItem(stack)
                 .world(worldIn)
                 .block(state)

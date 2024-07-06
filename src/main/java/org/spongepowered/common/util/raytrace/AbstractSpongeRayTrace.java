@@ -24,6 +24,8 @@
  */
 package org.spongepowered.common.util.raytrace;
 
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.ResourceKey;
@@ -45,8 +47,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.AABB;
 
 public abstract class AbstractSpongeRayTrace<T extends Locatable> implements RayTrace<@NonNull T> {
 
@@ -324,7 +324,7 @@ public abstract class AbstractSpongeRayTrace<T extends Locatable> implements Ray
             throw new IllegalStateException("start cannot be null");
         }
         if (this.end == null && this.direction == null) {
-            throw new IllegalStateException("end cannot be null");
+            throw new IllegalStateException("end or direction needs to be specified");
         }
         if (this.world == null) {
             throw new IllegalStateException("world cannot be null");

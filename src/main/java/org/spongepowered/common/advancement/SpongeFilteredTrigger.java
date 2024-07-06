@@ -26,6 +26,11 @@ package org.spongepowered.common.advancement;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import net.minecraft.advancements.CriterionTriggerInstance;
+import net.minecraft.advancements.critereon.SerializationContext;
+import net.minecraft.resources.ResourceLocation;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.spongepowered.api.advancement.criteria.trigger.FilteredTrigger;
 import org.spongepowered.api.advancement.criteria.trigger.FilteredTriggerConfiguration;
 import org.spongepowered.api.advancement.criteria.trigger.Trigger;
@@ -34,13 +39,11 @@ import org.spongepowered.api.data.persistence.DataFormats;
 import org.spongepowered.api.data.persistence.DataSerializable;
 
 import java.io.IOException;
-import net.minecraft.advancements.CriterionTriggerInstance;
-import net.minecraft.advancements.critereon.SerializationContext;
-import net.minecraft.resources.ResourceLocation;
 
 @SuppressWarnings("rawtypes")
 public final class SpongeFilteredTrigger implements CriterionTriggerInstance, FilteredTrigger {
 
+    private static final Logger LOGGER = LogManager.getLogger();
     private final static Gson GSON = new Gson();
 
     private final SpongeCriterionTrigger triggerType;
@@ -74,7 +77,7 @@ public final class SpongeFilteredTrigger implements CriterionTriggerInstance, Fi
                 final String json = DataFormats.JSON.get().write(dataContainer);
                 return SpongeFilteredTrigger.GSON.fromJson(json, JsonObject.class);
             } catch (IOException e) {
-                e.printStackTrace();
+                SpongeFilteredTrigger.LOGGER.error("Failed to serialize trigger to json", e);
             }
         }
 

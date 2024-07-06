@@ -35,6 +35,7 @@ import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.sound.SoundStop;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.title.Title;
+import net.kyori.adventure.title.TitlePart;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.network.protocol.Packet;
@@ -59,6 +60,7 @@ import org.spongepowered.api.advancement.Advancement;
 import org.spongepowered.api.advancement.AdvancementProgress;
 import org.spongepowered.api.advancement.AdvancementTree;
 import org.spongepowered.api.block.BlockState;
+import org.spongepowered.api.data.Keys;
 import org.spongepowered.api.data.value.Value;
 import org.spongepowered.api.effect.particle.ParticleEffect;
 import org.spongepowered.api.effect.sound.music.MusicDisc;
@@ -92,16 +94,17 @@ import org.spongepowered.common.bridge.server.level.ServerPlayerBridge;
 import org.spongepowered.common.bridge.world.level.border.WorldBorderBridge;
 import org.spongepowered.common.effect.particle.SpongeParticleHelper;
 import org.spongepowered.common.effect.record.SpongeMusicDisc;
+import org.spongepowered.common.entity.player.SpongeUserView;
 import org.spongepowered.common.entity.player.tab.SpongeTabList;
 import org.spongepowered.common.event.tracking.PhaseTracker;
 import org.spongepowered.common.mixin.api.minecraft.world.entity.player.PlayerMixin_API;
+import org.spongepowered.common.profile.SpongeGameProfile;
 import org.spongepowered.common.resourcepack.SpongeResourcePack;
 import org.spongepowered.common.util.BookUtil;
 import org.spongepowered.common.util.NetworkUtil;
 import org.spongepowered.math.vector.Vector3d;
 import org.spongepowered.math.vector.Vector3i;
 
-import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -112,6 +115,8 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+
+import javax.annotation.Nullable;
 
 @Mixin(net.minecraft.server.level.ServerPlayer.class)
 public abstract class ServerPlayerMixin_API extends PlayerMixin_API implements ServerPlayer {
@@ -158,7 +163,7 @@ public abstract class ServerPlayerMixin_API extends PlayerMixin_API implements S
 
     @Override
     public User user() {
-        return ((ServerPlayerBridge) this).bridge$getUser();
+        return SpongeUserView.create(this.uuid);
     }
 
     @Override
@@ -171,7 +176,7 @@ public abstract class ServerPlayerMixin_API extends PlayerMixin_API implements S
 
     @Override
     public GameProfile profile() {
-        return ((ServerPlayerBridge) this).bridge$getUser().profile();
+        return SpongeGameProfile.of(this.shadow$getGameProfile());
     }
 
     @Override
@@ -208,7 +213,7 @@ public abstract class ServerPlayerMixin_API extends PlayerMixin_API implements S
 
     @Override
     public String identifier() {
-        return ((ServerPlayerBridge) this).bridge$getUser().identifier();
+        return this.uuid.toString();
     }
 
     @Override
@@ -316,7 +321,7 @@ public abstract class ServerPlayerMixin_API extends PlayerMixin_API implements S
         if (!SpongeCommon.post(event)) {
             event.chatFormatter().ifPresent(formatter ->
                 event.audience().map(SpongeAdventure::unpackAudiences).ifPresent(targets -> {
-                    for (Audience target : targets) {
+                    for (final Audience target : targets) {
                         formatter.format(this, target, event.message(), event.originalMessage()).ifPresent(formattedMessage ->
                             target.sendMessage(this, formattedMessage));
                     }
@@ -398,20 +403,20 @@ public abstract class ServerPlayerMixin_API extends PlayerMixin_API implements S
     protected Set<Value.Immutable<?>> api$getVanillaValues() {
         final Set<Value.Immutable<?>> values = super.api$getVanillaValues();
 
-        // Humanoid
-        values.add(this.foodLevel().asImmutable());
-        values.add(this.exhaustion().asImmutable());
-        values.add(this.saturation().asImmutable());
-        values.add(this.gameMode().asImmutable());
+        values.add(this.requireValue(Keys.CHAT_COLORS_ENABLED).asImmutable());
+        values.add(this.requireValue(Keys.CHAT_VISIBILITY).asImmutable());
+        values.add(this.requireValue(Keys.GAME_MODE).asImmutable());
+        values.add(this.requireValue(Keys.HAS_VIEWED_CREDITS).asImmutable());
+        values.add(this.requireValue(Keys.LOCALE).asImmutable());
+        values.add(this.requireValue(Keys.PREVIOUS_GAME_MODE).asImmutable());
+        values.add(this.requireValue(Keys.SKIN_PARTS).asImmutable());
+        values.add(this.requireValue(Keys.SPECTATOR_TARGET).asImmutable());
+        // TODO ClassCastException: ServerStatsCounter -> StatsCounterBridge
+        // values.add(this.requireValue(Keys.STATISTICS).asImmutable());
+        values.add(this.requireValue(Keys.VIEW_DISTANCE).asImmutable());
 
-        // Player
-        values.add(this.firstJoined().asImmutable());
-        values.add(this.lastPlayed().asImmutable());
-        values.add(this.sleepingIgnored().asImmutable());
-        values.add(this.hasViewedCredits().asImmutable());
-
-        // If getSpectatingEntity returns this player, then we are not spectating any other entity, so spectatorTarget would be an Optional.empty()
-        this.spectatorTarget().map(Value::asImmutable).ifPresent(values::add);
+        this.getValue(Keys.HEALTH_SCALE).map(Value::asImmutable).ifPresent(values::add);
+        this.getValue(Keys.SKIN_PROFILE_PROPERTY).map(Value::asImmutable).ifPresent(values::add);
 
         return values;
     }
@@ -428,6 +433,7 @@ public abstract class ServerPlayerMixin_API extends PlayerMixin_API implements S
                         .withDynamic(Identity.NAME, () -> ((net.minecraft.server.level.ServerPlayer) (Object) this).getGameProfile().getName())
                         .withDynamic(Identity.DISPLAY_NAME, () -> this.displayName().get())
                         .withDynamic(Identity.UUID, ((Entity) (Object) this)::getUUID)
+                        .withDynamic(Identity.LOCALE, this::locale)
                         .withStatic(PermissionChecker.POINTER, permission -> SpongeAdventure.asAdventure(this.permissionValue(permission)))
                         .build();
                 } else {
@@ -481,6 +487,24 @@ public abstract class ServerPlayerMixin_API extends PlayerMixin_API implements S
         }
         this.connection.send(new ClientboundSetTitlesPacket(ClientboundSetTitlesPacket.Type.SUBTITLE, SpongeAdventure.asVanilla(title.subtitle())));
         this.connection.send(new ClientboundSetTitlesPacket(ClientboundSetTitlesPacket.Type.TITLE, SpongeAdventure.asVanilla(title.title())));
+    }
+
+    @Override
+    public <T> void sendTitlePart(final @NotNull TitlePart<T> part, final @NotNull T value) {
+        if (this.impl$isFake) {
+            return;
+        }
+        Objects.requireNonNull(value, "value");
+        if (part == TitlePart.TITLE) {
+            this.connection.send(new ClientboundSetTitlesPacket(ClientboundSetTitlesPacket.Type.TITLE, SpongeAdventure.asVanilla((Component) value)));
+        } else if (part == TitlePart.SUBTITLE) {
+            this.connection.send(new ClientboundSetTitlesPacket(ClientboundSetTitlesPacket.Type.SUBTITLE, SpongeAdventure.asVanilla((Component) value)));
+        } else if (part == TitlePart.TIMES) {
+            final Title.Times times = (Title.Times) value;
+            this.connection.send(new ClientboundSetTitlesPacket(this.api$durationToTicks(times.fadeIn()), this.api$durationToTicks(times.stay()), this.api$durationToTicks(times.fadeOut())));
+        } else {
+            throw new IllegalArgumentException("Unknown TitlePart '" + part + "'");
+        }
     }
 
     @Override

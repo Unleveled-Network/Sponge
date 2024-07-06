@@ -30,23 +30,31 @@ import net.minecraft.world.item.Rarity;
 import org.spongepowered.api.block.BlockType;
 import org.spongepowered.api.item.ItemRarity;
 import org.spongepowered.api.item.ItemType;
+import org.spongepowered.api.registry.RegistryTypes;
+import org.spongepowered.api.tag.Tag;
+import org.spongepowered.api.tag.TagType;
+import org.spongepowered.api.tag.TagTypes;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.common.data.holder.SpongeImmutableDataHolder;
+import org.spongepowered.common.util.TagUtil;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.function.Supplier;
 
 import javax.annotation.Nullable;
 
 @Mixin(Item.class)
-public abstract class ItemMixin_API implements ItemType {
+public abstract class ItemMixin_API implements ItemType, SpongeImmutableDataHolder<ItemType> {
 
     // @formatter:off
     @Shadow public abstract int shadow$getMaxStackSize();
     @Shadow public abstract String shadow$getDescriptionId();
     @Shadow @Final private Rarity rarity;
+    @Shadow @Nullable public abstract Item shadow$getCraftingRemainingItem();
     // @formatter:on
 
     @Nullable protected BlockType api$blockType = null;
@@ -79,5 +87,21 @@ public abstract class ItemMixin_API implements ItemType {
     @Override
     public boolean isAnyOf(ItemType... types) {
         return Arrays.stream(types).anyMatch(type -> type == this);
+    }
+
+    @Override
+    public TagType<ItemType> tagType() {
+        return TagTypes.ITEM_TYPE.get();
+    }
+
+    @Override
+    public Collection<Tag<ItemType>> tags() {
+        return TagUtil.getAssociatedTags(this, RegistryTypes.ITEM_TYPE_TAGS);
+    }
+
+    @Override
+    public Optional<ItemType> container() {
+        final Item craftingRemainingItem = this.shadow$getCraftingRemainingItem();
+        return Optional.ofNullable((ItemType) craftingRemainingItem);
     }
 }

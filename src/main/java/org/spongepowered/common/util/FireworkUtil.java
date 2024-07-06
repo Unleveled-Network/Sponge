@@ -27,6 +27,12 @@ package org.spongepowered.common.util;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.world.entity.projectile.FireworkRocketEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.item.FireworkEffect;
@@ -36,17 +42,11 @@ import org.spongepowered.api.registry.RegistryTypes;
 import org.spongepowered.api.util.Color;
 import org.spongepowered.common.accessor.world.entity.projectile.FireworkRocketEntityAccessor;
 import org.spongepowered.common.item.SpongeFireworkEffectBuilder;
-import org.spongepowered.common.item.SpongeItemStackBuilder;
+import org.spongepowered.common.item.SpongeItemStack;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import net.minecraft.core.MappedRegistry;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.world.entity.projectile.FireworkRocketEntity;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 public final class FireworkUtil {
 
@@ -69,7 +69,7 @@ public final class FireworkUtil {
         }
         if (compound.contains(Constants.Item.Fireworks.SHAPE_TYPE)) {
             final byte type = compound.getByte(Constants.Item.Fireworks.SHAPE_TYPE);
-            final MappedRegistry<FireworkShape> registry = (MappedRegistry<FireworkShape>) (Object) Sponge.game().registries().registry(RegistryTypes.FIREWORK_SHAPE);
+            final MappedRegistry<FireworkShape> registry = (MappedRegistry<FireworkShape>) (Object) Sponge.game().registry(RegistryTypes.FIREWORK_SHAPE);
             final @Nullable FireworkShape shape = registry.byId(type);
             if (shape != null) {
                 builder.shape(shape);
@@ -96,7 +96,7 @@ public final class FireworkUtil {
     }
 
     public static CompoundTag toCompound(final FireworkEffect effect) {
-        final MappedRegistry<FireworkShape> registry = (MappedRegistry<FireworkShape>) (Object) Sponge.game().registries().registry(RegistryTypes.FIREWORK_SHAPE);
+        final MappedRegistry<FireworkShape> registry = (MappedRegistry<FireworkShape>) (Object) Sponge.game().registry(RegistryTypes.FIREWORK_SHAPE);
 
         final CompoundTag tag = new CompoundTag();
         tag.putBoolean(Constants.Item.Fireworks.FLICKER, effect.flickers());
@@ -187,7 +187,7 @@ public final class FireworkUtil {
     public static ItemStack getItem(final FireworkRocketEntity firework) {
         ItemStack item = firework.getEntityData().get(FireworkRocketEntityAccessor.accessor$DATA_ID_FIREWORKS_ITEM());
         if (item.isEmpty()) {
-            item = (ItemStack) (Object) new SpongeItemStackBuilder().itemType(ItemTypes.FIREWORK_ROCKET).build();
+            item = (ItemStack) (Object) new SpongeItemStack.BuilderImpl().itemType(ItemTypes.FIREWORK_ROCKET).build();
             firework.getEntityData().set(FireworkRocketEntityAccessor.accessor$DATA_ID_FIREWORKS_ITEM(), item);
         }
         return item;

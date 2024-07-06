@@ -25,6 +25,8 @@
 package org.spongepowered.common.service.server.ban;
 
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.minecraft.server.players.UserBanList;
+import net.minecraft.server.players.UserBanListEntry;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.service.ban.Ban;
 import org.spongepowered.api.service.ban.BanService;
@@ -35,9 +37,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
-
-import net.minecraft.server.players.UserBanList;
-import net.minecraft.server.players.UserBanListEntry;
 
 /**
  * Redirects all calls to the {@link BanService}.
@@ -50,12 +49,12 @@ public class SpongeUserBanList extends UserBanList {
 
     @Override
     protected boolean contains(final com.mojang.authlib.GameProfile profile) {
-        return Sponge.server().serviceProvider().banService().banFor(SpongeGameProfile.of(profile)).join().isPresent();
+        return Sponge.server().serviceProvider().banService().find(SpongeGameProfile.of(profile)).join().isPresent();
     }
 
     @Override
     public UserBanListEntry get(final com.mojang.authlib.GameProfile profile) {
-        final Optional<Ban.Profile> ban = Sponge.server().serviceProvider().banService().banFor(SpongeGameProfile.of(profile)).join();
+        final Optional<Ban.Profile> ban = Sponge.server().serviceProvider().banService().find(SpongeGameProfile.of(profile)).join();
         return ban.map(x -> {
             if (x instanceof UserBanListEntry) {
                 return (UserBanListEntry) x;
@@ -82,7 +81,7 @@ public class SpongeUserBanList extends UserBanList {
 
     @Override
     public void add(final UserBanListEntry entry) {
-        Sponge.server().serviceProvider().banService().addBan((Ban) entry).join();
+        Sponge.server().serviceProvider().banService().add((Ban) entry).join();
     }
 
     @Override

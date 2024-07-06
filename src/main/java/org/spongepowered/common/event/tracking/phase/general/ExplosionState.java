@@ -25,6 +25,11 @@
 package org.spongepowered.common.event.tracking.phase.general;
 
 import com.google.common.collect.ImmutableList;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.Explosion;
+import net.minecraft.world.level.storage.loot.LootContext;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.entity.living.Living;
@@ -38,17 +43,12 @@ import org.spongepowered.common.accessor.world.level.ExplosionAccessor;
 import org.spongepowered.common.bridge.CreatorTrackedBridge;
 import org.spongepowered.common.event.tracking.PhaseTracker;
 import org.spongepowered.common.event.tracking.TrackingUtil;
-import org.spongepowered.common.event.tracking.context.transaction.ChangeBlock;
 import org.spongepowered.common.event.tracking.context.transaction.GameTransaction;
-import org.spongepowered.common.event.tracking.context.transaction.SpawnEntityTransaction;
+import org.spongepowered.common.event.tracking.context.transaction.block.ChangeBlock;
+import org.spongepowered.common.event.tracking.context.transaction.world.SpawnEntityTransaction;
 
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.level.Explosion;
-import net.minecraft.world.level.storage.loot.LootContext;
-import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 
 final class ExplosionState extends GeneralState<ExplosionContext> {
 
@@ -58,9 +58,9 @@ final class ExplosionState extends GeneralState<ExplosionContext> {
             final @Nullable LivingEntity placedBy = explosion.getSourceMob();
             if (placedBy != null) {
                 if (placedBy instanceof CreatorTrackedBridge) {
-                    ((CreatorTrackedBridge) placedBy).tracked$getCreatorReference()
+                    ((CreatorTrackedBridge) placedBy).tracker$getCreatorUUID()
                         .ifPresent(creator -> frame.addContext(EventContextKeys.CREATOR, creator));
-                    ((CreatorTrackedBridge) placedBy).tracked$getNotifierReference()
+                    ((CreatorTrackedBridge) placedBy).tracker$getNotifierUUID()
                         .ifPresent(notifier -> frame.addContext(EventContextKeys.NOTIFIER, notifier));
                 }
                 frame.addContext(EventContextKeys.IGNITER, (Living) placedBy);
@@ -75,20 +75,12 @@ final class ExplosionState extends GeneralState<ExplosionContext> {
     @Override
     public ExplosionContext createNewContext(final PhaseTracker tracker) {
         return new ExplosionContext(tracker)
-            .addEntityCaptures()
-            .addEntityDropCaptures()
-            .addBlockCaptures()
             .populateFromCurrentState();
     }
 
     @Override
     public BiConsumer<CauseStackManager.StackFrame, ExplosionContext> getFrameModifier() {
         return this.EXPLOSION_MODIFIER;
-    }
-
-    @Override
-    public boolean alreadyCapturingEntitySpawns() {
-        return true;
     }
 
     @Override
@@ -109,7 +101,7 @@ final class ExplosionState extends GeneralState<ExplosionContext> {
     @Override
     public SpawnEntityEvent createSpawnEvent(
         final ExplosionContext context,
-        final GameTransaction<@NonNull ?> parent,
+        final @Nullable GameTransaction<@NonNull ?> parent,
         final ImmutableList<Tuple<Entity, SpawnEntityTransaction.DummySnapshot>> collect,
         final Cause currentCause
     ) {

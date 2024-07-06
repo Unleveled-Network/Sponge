@@ -41,7 +41,10 @@ public final class SkullData {
         registrator
                 .asMutable(SkullBlockEntity.class)
                     .create(Keys.GAME_PROFILE)
-                        .get(h -> SpongeGameProfile.of(((SkullBlockEntityAccessor) h).accessor$owner()))
+                        .get(h -> {
+                            final SkullBlockEntityAccessor accessor = (SkullBlockEntityAccessor) h;
+                            return accessor.accessor$owner() == null ? null : SpongeGameProfile.of(accessor.accessor$owner());
+                        })
                         .set((h, v) -> ((SkullBlockEntityBridge) h).bridge$setUnresolvedPlayerProfile(SpongeGameProfile.toMcProfile(v)))
                         .delete(h -> ((SkullBlockEntityBridge) h).bridge$setUnresolvedPlayerProfile(null));
     }

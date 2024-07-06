@@ -25,15 +25,14 @@
 package org.spongepowered.common.data.datasync;
 
 import com.google.common.base.MoreObjects;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.world.entity.Entity;
 import org.spongepowered.api.data.DataTransactionResult;
-import org.spongepowered.api.data.value.Value.Immutable;
 import org.spongepowered.common.bridge.network.syncher.EntityDataAccessorBridge;
 
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import net.minecraft.network.syncher.EntityDataAccessor;
-import net.minecraft.world.entity.Entity;
 
 public abstract class DataParameterConverter<E> {
 
@@ -61,7 +60,7 @@ public abstract class DataParameterConverter<E> {
      */
     public abstract Optional<DataTransactionResult> createTransaction(Entity entity, E currentValue, E value);
 
-    public abstract E getValueFromEvent(E originalValue, List<Immutable<?>> immutableValues);
+    public abstract E getValueFromEvent(E originalValue, DataTransactionResult result);
 
     @Override
     public String toString() {

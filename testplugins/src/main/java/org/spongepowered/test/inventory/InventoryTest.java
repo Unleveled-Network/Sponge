@@ -28,6 +28,8 @@ import com.google.inject.Inject;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.command.Command;
+import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.parameter.CommandContext;
 import org.spongepowered.api.data.KeyValueMatcher;
 import org.spongepowered.api.data.Keys;
@@ -36,13 +38,17 @@ import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.event.Cause;
 import org.spongepowered.api.event.Listener;
+import org.spongepowered.api.event.block.entity.CookingEvent;
 import org.spongepowered.api.event.entity.ChangeEntityEquipmentEvent;
+import org.spongepowered.api.event.filter.Getter;
 import org.spongepowered.api.event.item.inventory.ChangeInventoryEvent;
 import org.spongepowered.api.event.item.inventory.CraftItemEvent;
+import org.spongepowered.api.event.item.inventory.DropItemEvent;
 import org.spongepowered.api.event.item.inventory.EnchantItemEvent;
 import org.spongepowered.api.event.item.inventory.TransferInventoryEvent;
 import org.spongepowered.api.event.item.inventory.container.ClickContainerEvent;
 import org.spongepowered.api.event.item.inventory.container.InteractContainerEvent;
+import org.spongepowered.api.event.lifecycle.RegisterCommandEvent;
 import org.spongepowered.api.item.ItemTypes;
 import org.spongepowered.api.item.inventory.Container;
 import org.spongepowered.api.item.inventory.ContainerTypes;
@@ -52,6 +58,7 @@ import org.spongepowered.api.item.inventory.ItemStackSnapshot;
 import org.spongepowered.api.item.inventory.Slot;
 import org.spongepowered.api.item.inventory.entity.Hotbar;
 import org.spongepowered.api.item.inventory.entity.PrimaryPlayerInventory;
+import org.spongepowered.api.item.inventory.equipment.EquipmentType;
 import org.spongepowered.api.item.inventory.menu.ClickType;
 import org.spongepowered.api.item.inventory.menu.InventoryMenu;
 import org.spongepowered.api.item.inventory.menu.handler.SlotClickHandler;
@@ -60,11 +67,13 @@ import org.spongepowered.api.item.inventory.transaction.SlotTransaction;
 import org.spongepowered.api.item.inventory.type.GridInventory;
 import org.spongepowered.api.item.inventory.type.ViewableInventory;
 import org.spongepowered.api.registry.RegistryTypes;
+import org.spongepowered.api.scheduler.Task;
 import org.spongepowered.math.vector.Vector2i;
 import org.spongepowered.plugin.PluginContainer;
-import org.spongepowered.plugin.jvm.Plugin;
+import org.spongepowered.plugin.builtin.jvm.Plugin;
 import org.spongepowered.test.LoadableModule;
 
+import java.util.ArrayList;
 import java.util.Optional;
 
 @Plugin("inventorytest")
@@ -75,6 +84,22 @@ public final class InventoryTest implements LoadableModule {
     @Inject
     public InventoryTest(final PluginContainer plugin) {
         this.plugin = plugin;
+    }
+
+    @Listener
+    public void onRegisterCommand(final RegisterCommandEvent<Command.Parameterized> event) {
+        final Command.Builder builder = Command.builder();
+        builder.addChild(Command.builder().executor(this::enderchest).build(), "ender");
+        event.register(this.plugin, builder.build(), "inventorytest");
+    }
+
+    private CommandResult enderchest(CommandContext commandContext) {
+        final ServerPlayer player = commandContext.cause().first(ServerPlayer.class).orElse(null);
+        if (player == null) {
+            return CommandResult.error(Component.text("Must be run ingame by a player"));
+        }
+        player.openInventory(player.enderChestInventory());
+        return CommandResult.success();
     }
 
     public static class InventoryTestListener {
@@ -114,6 +139,12 @@ public final class InventoryTest implements LoadableModule {
         }
 
         @Listener
+        public void onCooking(final CookingEvent event) {
+            final String recipe = event.recipe().isPresent() ? event.recipe().get().key().toString() : "no recipe";
+            this.plugin.logger().info("{} in {} using {}", event.getClass().getSimpleName(), event.blockEntity().getClass().getSimpleName(), recipe);
+        }
+
+        @Listener
         public void onInteractContainer(final InteractContainerEvent event) {
             if (event instanceof EnchantItemEvent) {
                 this.plugin.logger().info("{} [{}] S:{}", event.getClass().getSimpleName(), ((EnchantItemEvent) event).option(),
@@ -122,33 +153,64 @@ public final class InventoryTest implements LoadableModule {
             final Optional<Component> component = event.container().get(Keys.DISPLAY_NAME);
             final String title = component.map(c -> PlainTextComponentSerializer.plainText().serialize(c)).orElse("No Title");
             if (title.equals("Foobar")) {
-                InventoryTest.doFancyStuff(event.cause().first(Player.class).get());
+                InventoryTest.doFancyStuff(this.plugin, event.cause().first(Player.class).get());
+            }
+        }
+
+        @Listener
+        public void beforePickup(final ChangeInventoryEvent.Pickup.Pre event) {
+            if (event.originalStack().type().isAnyOf(ItemTypes.BEDROCK)) {
+                final ItemStackSnapshot stack = ItemStack.of(ItemTypes.COBBLESTONE, 64).createSnapshot();
+                final ArrayList<ItemStackSnapshot> items = new ArrayList<>();
+                event.setCustom(items);
+                for (int i = 0; i < 100; i++) {
+                    items.add(stack);
+                }
             }
         }
 
         @Listener
         public void onInteract(final ChangeInventoryEvent event) {
-
+            this.plugin.logger().info("{} {} {}", event.getClass().getSimpleName(), event.inventory().getClass().getSimpleName(), event.cause());
             if (event instanceof ClickContainerEvent) {
-                this.plugin.logger().info("{} {}", event.getClass().getSimpleName(), ((ClickContainerEvent) event).container().getClass().getSimpleName());
                 final Transaction<ItemStackSnapshot> cursor = ((ClickContainerEvent) event).cursorTransaction();
-                this.plugin.logger().info("  Cursor: {}x{}->{}x{}", cursor.original().type(), cursor.original().quantity(),
-                        cursor.finalReplacement().type(), cursor.finalReplacement().quantity());
-            } else {
-                this.plugin.logger().info("{} {}", event.getClass().getSimpleName(), event.inventory().getClass().getSimpleName());
+                ((ClickContainerEvent) event).slot().ifPresent(clicked -> {
+                    this.plugin.logger().info("  Clicked: {}", InventoryTest.slotName(clicked));
+                });
+                this.plugin.logger().info("  Cursor: {}x{}->{}x{}", cursor.original().type().key(RegistryTypes.ITEM_TYPE), cursor.original().quantity(),
+                        cursor.finalReplacement().type().key(RegistryTypes.ITEM_TYPE), cursor.finalReplacement().quantity());
+                if (event instanceof CraftItemEvent.Preview) {
+                    final SlotTransaction preview = ((CraftItemEvent.Preview) event).preview();
+                    this.plugin.logger().info("  Preview: {}x{}->{}x{}", preview.original().type().key(RegistryTypes.ITEM_TYPE), preview.original().quantity(),
+                            preview.finalReplacement().type().key(RegistryTypes.ITEM_TYPE), preview.finalReplacement().quantity());
+                }
+                if (event instanceof CraftItemEvent.Craft) {
+                    final ItemStackSnapshot craft = ((CraftItemEvent.Craft) event).crafted();
+                    this.plugin.logger().info("  Craft: {}x{}", craft.type().key(RegistryTypes.ITEM_TYPE), craft.quantity());
+                }
             }
+            if (event instanceof ChangeInventoryEvent.Drop) {
+                final Slot hand = ((ChangeInventoryEvent.Drop) event).slot();
+                this.plugin.logger().info("  Hand: {}", InventoryTest.slotName(hand));
+            }
+            if (event instanceof ClickContainerEvent.Creative.Drop) {
+                final ItemStackSnapshot stack = ((ClickContainerEvent.Creative.Drop) event).droppedStack();
+                this.plugin.logger().info("  Creative Drop: {}x{}", stack.type().key(RegistryTypes.ITEM_TYPE), stack.quantity());
+            }
+            if (event instanceof DropItemEvent.Dispense) {
+                this.plugin.logger().info("  Dropping: {} entities", ((DropItemEvent.Dispense) event).entities().size());
+            }
+
             for (final SlotTransaction slotTrans : event.transactions()) {
-                final Optional<Integer> integer = slotTrans.slot().get(Keys.SLOT_INDEX);
-                this.plugin.logger().info("  SlotTr: {}x{}->{}x{}[{}]", slotTrans.original().type(), slotTrans.original().quantity(),
-                        slotTrans.finalReplacement().type(), slotTrans.finalReplacement().quantity(), integer.get());
+                this.plugin.logger().info("  SlotTr: {}x{}->{}x{}[{}]", slotTrans.original().type().key(RegistryTypes.ITEM_TYPE), slotTrans.original().quantity(),
+                        slotTrans.finalReplacement().type().key(RegistryTypes.ITEM_TYPE), slotTrans.finalReplacement().quantity(), InventoryTest.slotName(slotTrans.slot()));
             }
         }
 
         @Listener
-        public void onChangeEquipment(final ChangeEntityEquipmentEvent event) {
+        public void onChangeEquipment(final ChangeEntityEquipmentEvent event, @Getter("transaction") Transaction<ItemStackSnapshot> transaction) {
             final Slot slot = event.slot();
-            final Transaction<ItemStackSnapshot> transaction = event.transaction();
-            this.plugin.logger().info("{}: {} {}->{}",
+            this.plugin.logger().info("Equipment: {}: {} {}->{}",
                     event.entity().type().key(RegistryTypes.ENTITY_TYPE),
                     slot.get(Keys.EQUIPMENT_TYPE).get().key(RegistryTypes.EQUIPMENT_TYPE),
                     transaction.original().type().key(RegistryTypes.ITEM_TYPE),
@@ -160,10 +222,13 @@ public final class InventoryTest implements LoadableModule {
             if (event instanceof TransferInventoryEvent.Post) {
                 this.plugin.logger().info("{} {}=>{}", event.getClass().getSimpleName(), event.sourceInventory().getClass().getSimpleName(), event.targetInventory()
                         .getClass().getSimpleName());
-                final Integer sourceIdx = ((TransferInventoryEvent.Post) event).sourceSlot().get(Keys.SLOT_INDEX).get();
-                final Integer targetIdx = ((TransferInventoryEvent.Post) event).targetSlot().get(Keys.SLOT_INDEX).get();
+                final Slot source = ((TransferInventoryEvent.Post) event).sourceSlot();
+                final Integer sourceIdx = source.get(Keys.SLOT_INDEX).get();
+                final Slot target = ((TransferInventoryEvent.Post) event).targetSlot();
+                final Integer targetIdx = target.get(Keys.SLOT_INDEX).get();
                 final ItemStackSnapshot item = ((TransferInventoryEvent.Post) event).transferredItem();
-                this.plugin.logger().info("[{}] -> [{}] {}x{}", sourceIdx, targetIdx, item.type(), item.quantity());
+                this.plugin.logger().info("{}[{}] -> {}[{}] {}x{}", source.parent().getClass().getSimpleName(), sourceIdx,
+                        target.parent().getClass().getSimpleName(), targetIdx, ItemTypes.registry().valueKey(item.type()), item.quantity());
             }
         }
 
@@ -176,21 +241,28 @@ public final class InventoryTest implements LoadableModule {
         }
     }
 
+    private static String slotName(Slot clicked) {
+        final Optional<Integer> idx = clicked.get(Keys.SLOT_INDEX);
+        final Optional<EquipmentType> equipmentType = clicked.get(Keys.EQUIPMENT_TYPE);
+        return idx.map(String::valueOf).orElse(equipmentType.map(t -> t.key(RegistryTypes.EQUIPMENT_TYPE).asString()).orElse("?"));
+    }
+
     @Override
     public void enable(final CommandContext ctx) {
         Sponge.eventManager().registerListeners(this.plugin, new InventoryTestListener(this.plugin));
     }
 
-    private static void doFancyStuff(final Player player) {
+    private static void doFancyStuff(final PluginContainer plugin, final Player player) {
 
         final GridInventory inv27Grid = player.inventory().query(PrimaryPlayerInventory.class).get().storage();
-        final Inventory inv27Slots = Inventory.builder().slots(27).completeStructure().build();
-        final Inventory inv27Slots2 = Inventory.builder().slots(27).completeStructure().build();
+        final Inventory inv27Slots = Inventory.builder().slots(27).completeStructure().plugin(plugin).build();
+        final Inventory inv27Slots2 = Inventory.builder().slots(27).completeStructure().plugin(plugin).build();
         final ViewableInventory doubleMyInventory = ViewableInventory.builder().type(ContainerTypes.GENERIC_9X6.get())
                 .grid(inv27Slots.slots(), Vector2i.from(9, 3), Vector2i.from(0, 0))
                 .grid(inv27Slots2.slots(), Vector2i.from(9, 3), Vector2i.from(0, 3))
                 .completeStructure()
                 .carrier(player)
+                .plugin(plugin)
                 .build();
         final InventoryMenu menu = doubleMyInventory.asMenu();
         menu.setReadOnly(true);
@@ -198,17 +270,21 @@ public final class InventoryTest implements LoadableModule {
         doubleMyInventory.set(8, ItemStack.of(ItemTypes.GOLD_INGOT));
         doubleMyInventory.set(45, ItemStack.of(ItemTypes.EMERALD));
         doubleMyInventory.set(53, ItemStack.of(ItemTypes.DIAMOND));
-        menu.registerSlotClick(new MySlotClickHandler(menu, doubleMyInventory));
-        final Optional<Container> open = menu.open((ServerPlayer) player);
+        menu.registerSlotClick(new MySlotClickHandler(plugin, menu, doubleMyInventory));
+        Sponge.server().scheduler().submit(Task.builder().plugin(plugin).execute(() -> {
+            menu.open((ServerPlayer) player);
+        }).build());
     }
 
     private static class MySlotClickHandler implements SlotClickHandler {
 
         private final InventoryMenu menu;
+        private PluginContainer plugin;
         private final ViewableInventory primary;
         private ViewableInventory last;
 
-        public MySlotClickHandler(final InventoryMenu menu, final ViewableInventory primary) {
+        public MySlotClickHandler(PluginContainer plugin, final InventoryMenu menu, final ViewableInventory primary) {
+            this.plugin = plugin;
             this.primary = primary;
             this.menu = menu;
         }
@@ -224,15 +300,15 @@ public final class InventoryTest implements LoadableModule {
                     case 53:
                         this.last = ViewableInventory.builder().type(ContainerTypes.GENERIC_9X6.get())
                                 .fillDummy().item(slot.peek().createSnapshot())
-                                .completeStructure().build();
-                        this.menu.setCurrentInventory(this.last);
+                                .completeStructure().plugin(this.plugin).build();
+                        Sponge.server().scheduler().submit(Task.builder().execute(() -> this.menu.setCurrentInventory(this.last)).plugin(this.plugin).build());
                         break;
                     default:
                         slot.set(ItemStack.of(ItemTypes.BEDROCK));
                 }
                 return false;
             } else if (slot.viewedSlot().parent() == this.last) {
-                this.menu.setCurrentInventory(this.primary);
+                Sponge.server().scheduler().submit(Task.builder().execute(() -> this.menu.setCurrentInventory(this.primary)).plugin(this.plugin).build());
                 return false;
             }
             return true;

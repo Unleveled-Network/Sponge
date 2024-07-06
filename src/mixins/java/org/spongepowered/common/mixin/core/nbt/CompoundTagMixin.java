@@ -24,20 +24,20 @@
  */
 package org.spongepowered.common.mixin.core.nbt;
 
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import org.apache.logging.log4j.Level;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.util.PrettyPrinter;
 import org.spongepowered.common.SpongeCommon;
+import org.spongepowered.common.util.PrettyPrinter;
 
 import java.util.Map;
 
 import javax.annotation.Nullable;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
 
 /**
  * @author Zidane - Minecraft 1.14.4
@@ -55,7 +55,7 @@ public abstract class CompoundTagMixin {
     @Shadow @Final private Map<String, Tag> tags;
     // @formatter:on
 
-    @Redirect(method = "copy", at = @At(value = "INVOKE", target = "Lnet/minecraft/nbt/Tag;copy()Lnet/minecraft/nbt/Tag;"))
+    @Redirect(method = "copy()Lnet/minecraft/nbt/CompoundTag;", at = @At(value = "INVOKE", target = "Lnet/minecraft/nbt/Tag;copy()Lnet/minecraft/nbt/Tag;"))
     @Nullable
     private Tag impl$checkForOverflowOnCopy(Tag inbt) {
         try {
@@ -71,13 +71,13 @@ public abstract class CompoundTagMixin {
             printer.add();
             try {
                 printer.addWrapped(80, "%s : %s", "This compound", this);
-            } catch (Throwable error) {
+            } catch (final Throwable error) {
                 printer.addWrapped(80, "Unable to get the string of this compound. Printing out some of the entries to better assist");
 
                 for (final Map.Entry<String, Tag> entry : this.tags.entrySet()) {
                     try {
                         printer.addWrapped(80, "%s : %s", entry.getKey(), entry.getValue());
-                    } catch (Throwable throwable) {
+                    } catch (final Throwable throwable) {
                         printer.add();
                         printer.addWrapped(80, "The offending key entry is belonging to " + entry.getKey());
                         break;
@@ -90,7 +90,7 @@ public abstract class CompoundTagMixin {
         }
     }
 
-    @Redirect(method = "copy", at = @At(value = "INVOKE", target = "Lnet/minecraft/nbt/CompoundTag;put(Ljava/lang/String;Lnet/minecraft/nbt/Tag;)Lnet/minecraft/nbt/Tag;"))
+    @Redirect(method = "copy()Lnet/minecraft/nbt/CompoundTag;", at = @At(value = "INVOKE", target = "Lnet/minecraft/nbt/CompoundTag;put(Ljava/lang/String;Lnet/minecraft/nbt/Tag;)Lnet/minecraft/nbt/Tag;"))
     private Tag impl$checkForNullNBTValuesDuringCopy(CompoundTag compound, String key, Tag value) {
         if (value == null) {
             final IllegalStateException exception = new IllegalStateException("There is a null NBT component in the compound for key: " + key);

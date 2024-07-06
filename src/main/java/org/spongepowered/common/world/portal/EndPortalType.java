@@ -24,21 +24,22 @@
  */
 package org.spongepowered.common.world.portal;
 
+import net.minecraft.server.level.ServerLevel;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.util.Axis;
-import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.api.world.portal.Portal;
+import org.spongepowered.api.world.server.ServerLocation;
 
 import java.util.Objects;
 import java.util.Optional;
-import net.minecraft.server.level.ServerLevel;
 
 public final class EndPortalType extends VanillaPortalType {
 
     @Override
-    public void generatePortal(final ServerLocation location, final Axis axis) {
+    public boolean generatePortal(final ServerLocation location, final Axis axis) {
         Objects.requireNonNull(location);
         PortalHelper.generateEndPortal((ServerLevel) location.world(), location.blockX(), location.blockY(), location.blockZ(), true);
+        return true;
     }
 
     @Override

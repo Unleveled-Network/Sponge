@@ -24,6 +24,7 @@
  */
 package org.spongepowered.common.bridge.block;
 
+import net.minecraft.world.level.block.Block;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.data.DataManipulator.Immutable;
 import org.spongepowered.api.data.Key;
@@ -34,7 +35,6 @@ import org.spongepowered.common.bridge.server.level.ServerLevelBridge;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BiConsumer;
-import net.minecraft.world.level.block.Block;
 
 /**
  * A quasi interface to mix into every possible {@link Block} such that their
@@ -113,14 +113,6 @@ public interface BlockBridge {
     boolean bridge$hasCollideWithStateLogic();
 
     /**
-     * Used to determine if this block should fire 
-     * sponge events during WorldServer#addBlockEvent.
-     *
-     * @return Whether this block should fire events
-     */
-    boolean bridge$shouldFireBlockEvents();
-
-    /**
      * Used only for Forge's dummy air block that is acting as a surrogate block for missing
      * mod blocks. Usually when a block is simply marked for replacement when a mod is re-introduced.
      *
@@ -129,8 +121,6 @@ public interface BlockBridge {
     default boolean bridge$isDummy() {
         return false;
     }
-
-    void bridge$initializeTrackerState();
 
     default BiConsumer<CauseStackManager.StackFrame, ServerLevelBridge> bridge$getTickFrameModifier() {
         return (frame, world) -> {

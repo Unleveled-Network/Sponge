@@ -25,6 +25,7 @@
 package org.spongepowered.common.mixin.api.minecraft.network.protocol.status;
 
 import com.mojang.authlib.GameProfile;
+import net.minecraft.network.protocol.status.ServerStatus;
 import org.spongepowered.api.event.server.ClientPingServerEvent;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -37,7 +38,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.annotation.Nullable;
-import net.minecraft.network.protocol.status.ServerStatus;
 
 @Mixin(ServerStatus.Players.class)
 public abstract class ServerStatus_PlayersMixin_API implements ClientPingServerEvent.Response.Players {
@@ -93,7 +93,10 @@ public abstract class ServerStatus_PlayersMixin_API implements ClientPingServerE
         // TODO: When serializing, Minecraft calls this method frequently (it doesn't store the result).
         // Maybe we should cache this until the list is modified or patch the serialization?
         return this.profiles.stream()
-                .map(SpongeGameProfile::toMcProfile)
+                // Make sure profiles are sent with non-null UUIDs and names because everything else
+                // will make the response invalid on the client. Some plugins use empty UUIDs to create
+                // custom lines in the player list that do not refer to a specific player.
+                .map(SpongeGameProfile::toMcProfileNonNull)
                 .toArray(GameProfile[]::new);
     }
 

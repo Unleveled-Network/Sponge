@@ -29,21 +29,21 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.command.manager.CommandMapping;
 import org.spongepowered.api.command.registrar.CommandRegistrar;
-import org.spongepowered.api.command.registrar.tree.CommandTreeNode;
 import org.spongepowered.plugin.PluginContainer;
 
+import java.util.Optional;
 import java.util.Set;
 
 public final class SpongeCommandMapping implements CommandMapping {
 
     private final String alias;
     private final Set<String> allAliases;
-    private final PluginContainer container;
+    private final @Nullable PluginContainer container;
     private final CommandRegistrar<?> registrar;
 
     public SpongeCommandMapping(final String alias,
                                 final Set<String> allAliases,
-                                final PluginContainer container,
+                                final @Nullable PluginContainer container,
                                 final CommandRegistrar<?> registrar) {
         this.alias = alias;
         this.allAliases = ImmutableSet.copyOf(allAliases);
@@ -62,13 +62,23 @@ public final class SpongeCommandMapping implements CommandMapping {
     }
 
     @Override
-    public @NonNull PluginContainer plugin() {
-        return this.container;
+    public @NonNull Optional<PluginContainer> plugin() {
+        return Optional.ofNullable(this.container);
     }
 
     @Override
     public @NonNull CommandRegistrar<?> registrar() {
         return this.registrar;
+    }
+
+    @Override
+    public String toString() {
+        return "SpongeCommandMapping{" +
+                "alias='" + this.alias + '\'' +
+                ", allAliases=" + this.allAliases +
+                ", container=" + this.container +
+                ", registrar=" + this.registrar +
+                '}';
     }
 
 }

@@ -30,9 +30,9 @@ import org.spongepowered.api.data.persistence.DataView;
 import org.spongepowered.api.map.MapCanvas;
 import org.spongepowered.api.map.color.MapColor;
 import org.spongepowered.api.registry.RegistryTypes;
-import org.spongepowered.common.util.MapUtil;
 import org.spongepowered.common.map.color.SpongeMapColor;
 import org.spongepowered.common.util.Constants;
+import org.spongepowered.common.util.MapUtil;
 
 import java.awt.Graphics2D;
 import java.awt.Image;
@@ -111,8 +111,8 @@ public final class SpongeMapCanvasBuilder implements MapCanvas.Builder {
         final int[] pixels = ((DataBufferInt) bufferedImage.getRaster().getDataBuffer()).getData();
         // Get the color palette we are working with
         final Map<Integer, SpongeMapColor> palette = new HashMap<>();
-        Sponge.game().registries().registry(RegistryTypes.MAP_COLOR_TYPE).stream().forEach(color -> {
-            Sponge.game().registries().registry(RegistryTypes.MAP_SHADE).stream().forEach(shade -> {
+        Sponge.game().registry(RegistryTypes.MAP_COLOR_TYPE).stream().forEach(color -> {
+            Sponge.game().registry(RegistryTypes.MAP_SHADE).stream().forEach(shade -> {
                 final SpongeMapColor spongeMapColor = new SpongeMapColor(color, shade);
                 palette.put(spongeMapColor.color().rgb(), spongeMapColor);
             });

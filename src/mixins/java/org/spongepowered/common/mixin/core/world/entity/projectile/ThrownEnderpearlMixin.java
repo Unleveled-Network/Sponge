@@ -24,6 +24,9 @@
  */
 package org.spongepowered.common.mixin.core.world.entity.projectile;
 
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.projectile.ThrownEnderpearl;
+import net.minecraft.world.phys.HitResult;
 import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.event.EventContextKeys;
 import org.spongepowered.api.event.SpongeEventFactory;
@@ -38,15 +41,9 @@ import org.spongepowered.common.SpongeCommon;
 import org.spongepowered.common.event.ShouldFire;
 import org.spongepowered.common.event.tracking.PhaseTracker;
 import org.spongepowered.common.util.VecHelper;
-import org.spongepowered.common.world.portal.PlatformTeleporter;
 import org.spongepowered.math.vector.Vector3d;
 
 import javax.annotation.Nullable;
-
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.projectile.ThrownEnderpearl;
-import net.minecraft.world.phys.HitResult;
 
 @Mixin(ThrownEnderpearl.class)
 public abstract class ThrownEnderpearlMixin extends ThrowableProjectileMixin {
@@ -74,7 +71,6 @@ public abstract class ThrownEnderpearlMixin extends ThrowableProjectileMixin {
 
         try (final CauseStackManager.StackFrame frame = PhaseTracker.getCauseStackManager().pushCauseFrame()) {
             frame.pushCause(entity);
-            frame.pushCause(this);
             frame.addContext(EventContextKeys.MOVEMENT_TYPE, MovementTypes.ENDER_PEARL);
 
             final MoveEntityEvent event = SpongeEventFactory.createMoveEntityEvent(frame.currentCause(),
@@ -83,6 +79,7 @@ public abstract class ThrownEnderpearlMixin extends ThrowableProjectileMixin {
             if (SpongeCommon.post(event)) {
                 // Eventhough the event is made, the pearl was still created so remove it anyways
                 this.shadow$remove();
+                ci.cancel();
                 return;
             }
 
@@ -94,9 +91,7 @@ public abstract class ThrownEnderpearlMixin extends ThrowableProjectileMixin {
 
     @Override
     @Nullable
-    public Entity bridge$changeDimension(final ServerLevel dimensionIn, final PlatformTeleporter teleporter) {
-        final Entity entity = super.bridge$changeDimension(dimensionIn, teleporter);
-
+    public Entity impl$postProcessChangeDimension(final Entity entity) {
         if (entity instanceof ThrownEnderpearl) {
             // We actually teleported so...
             this.shadow$setOwner(null);

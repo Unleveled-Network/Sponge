@@ -24,32 +24,36 @@
  */
 package org.spongepowered.common.event.tracking.phase.general;
 
+import net.minecraft.server.level.ServerPlayer;
 import org.checkerframework.checker.nullness.qual.Nullable;
-import org.spongepowered.common.util.PrettyPrinter;
-import org.spongepowered.common.bridge.world.inventory.container.TrackedInventoryBridge;
+import org.spongepowered.api.command.manager.CommandMapping;
 import org.spongepowered.common.event.tracking.IPhaseState;
 import org.spongepowered.common.event.tracking.PhaseTracker;
-
+import org.spongepowered.common.event.tracking.context.transaction.EffectTransactor;
+import org.spongepowered.common.event.tracking.context.transaction.TransactionalCaptureSupplier;
+import org.spongepowered.common.event.tracking.context.transaction.effect.BroadcastInventoryChangesEffect;
+import org.spongepowered.common.event.tracking.context.transaction.inventory.PlayerInventoryTransaction;
+import org.spongepowered.common.util.PrettyPrinter;
 
 public class CommandPhaseContext extends GeneralPhaseContext<CommandPhaseContext> {
 
     @Nullable String command;
-    private @Nullable TrackedInventoryBridge inventory;
+    @Nullable CommandMapping commandMapping;
 
-    CommandPhaseContext(final IPhaseState<CommandPhaseContext> state, PhaseTracker tracker) {
+    CommandPhaseContext(final IPhaseState<CommandPhaseContext> state, final PhaseTracker tracker) {
         super(state, tracker);
     }
 
     @Override
     public boolean hasCaptures() {
-        return (this.inventory != null && !this.inventory.bridge$getCapturedSlotTransactions().isEmpty()) || super.hasCaptures();
+        return super.hasCaptures();
     }
 
     @Override
     protected void reset() {
         super.reset();
         this.command = null;
-        this.inventory = null;
+        this.commandMapping = null;
     }
 
     public CommandPhaseContext command(final String command) {
@@ -57,20 +61,32 @@ public class CommandPhaseContext extends GeneralPhaseContext<CommandPhaseContext
         return this;
     }
 
+    public CommandPhaseContext commandMapping(final CommandMapping mapping) {
+        this.commandMapping = mapping;
+        return this;
+    }
+
     @Override
     public PrettyPrinter printCustom(final PrettyPrinter printer, final int indent) {
         final String s = String.format("%1$" + indent + "s", "");
         super.printCustom(printer, indent)
-            .add(s + "- %s: %s", "Command", this.command == null ? "empty command" : this.command);
-        if (this.inventory != null) {
-            printer.add(s + "-%s: %s", "Inventory", this.inventory.bridge$getCapturedSlotTransactions());
-        }
+            .add(s + "- %s: %s", "Command", this.command == null ? "empty command" : this.command)
+            .add(s + "- %s: %s", "Command Mapping", this.commandMapping == null ? "no mapping" : this.commandMapping.toString());
         return printer;
     }
 
-    public CommandPhaseContext inventory(final TrackedInventoryBridge inventory) {
-        this.inventory = inventory;
-        return this;
+    @Override
+    public void close() {
+        // Make sure to broadcast any changes to capture any inventory transactions for events.
+        if (this.getSource() instanceof ServerPlayer) {
+            final TransactionalCaptureSupplier transactor = this.getTransactor();
+            transactor.logPlayerInventoryChange((ServerPlayer) this.getSource(), PlayerInventoryTransaction.EventCreator.STANDARD);
+            try (EffectTransactor ignored = BroadcastInventoryChangesEffect.transact(transactor)) {
+                ((ServerPlayer) this.getSource()).containerMenu.broadcastChanges();
+            }
+        }
+
+        super.close();
     }
 
     // Maybe we could provide the command?

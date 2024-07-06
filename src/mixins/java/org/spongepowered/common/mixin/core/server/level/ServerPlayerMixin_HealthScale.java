@@ -57,8 +57,8 @@ public abstract class ServerPlayerMixin_HealthScale extends PlayerMixin implemen
     @Shadow public ServerGamePacketListenerImpl connection;
     // @formatter:on
 
+    private AttributeInstance impl$cachedMaxHealthAttribute = null;
     private Double impl$healthScale = null;
-    private float impl$cachedModifiedHealth = -1;
 
     @Inject(method = "doTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;getArmorValue()I", ordinal = 1))
     private void updateHealthPriorToArmor(final CallbackInfo ci) {
@@ -71,16 +71,27 @@ public abstract class ServerPlayerMixin_HealthScale extends PlayerMixin implemen
     }
 
     @Override
-    public void bridge$setHealthScale(final Double scale) {
+    public boolean bridge$setHealthScale(final double scale) {
+        if (scale < 1.0F || scale > Float.MAX_VALUE) {
+            return false;
+        }
+
         this.impl$healthScale = scale;
-        this.impl$cachedModifiedHealth = -1;
         this.lastSentHealth = -1.0F;
 
-        if (scale == null) {
-            ((SpongeDataHolderBridge) this).bridge$remove(Keys.HEALTH_SCALE);
-        } else {
-            ((SpongeDataHolderBridge) this).bridge$offer(Keys.HEALTH_SCALE, scale);
-        }
+        ((SpongeDataHolderBridge) this).bridge$offer(Keys.HEALTH_SCALE, scale);
+
+        this.bridge$refreshScaledHealth();
+        return true;
+    }
+
+    @Override
+    public void bridge$resetHealthScale() {
+        this.impl$healthScale = null;
+        this.lastSentHealth = -1.0F;
+
+        ((SpongeDataHolderBridge) this).bridge$remove(Keys.HEALTH_SCALE);
+
         this.bridge$refreshScaledHealth();
     }
 
@@ -96,41 +107,50 @@ public abstract class ServerPlayerMixin_HealthScale extends PlayerMixin implemen
         final FoodData foodData = this.shadow$getFoodData();
         this.connection.send(new ClientboundSetHealthPacket(this.bridge$getInternalScaledHealth(), foodData.getFoodLevel(), foodData.getSaturationLevel()));
         this.connection.send(new ClientboundUpdateAttributesPacket(this.shadow$getId(), dirtyInstances));
+
         // Reset the dirty instances since they've now been manually updated on the client.
         dirtyInstances.clear();
 
+        // Clear the cached value, so it doesn't carry over to future calls to getInternalScaledHealth.
+        this.impl$cachedMaxHealthAttribute = null;
     }
 
     @Override
     public void bridge$injectScaledHealth(final Collection<AttributeInstance> set) {
         // We need to remove the existing attribute instance for max health, since it's not always going to be the
         // same as SharedMonsterAttributes.MAX_HEALTH
-        @Nullable Collection<AttributeModifier> modifiers = null;
+        @Nullable AttributeInstance attribute = null;
         boolean foundMax = false; // Sometimes the max health isn't modified and no longer dirty
         for (final Iterator<AttributeInstance> iter = set.iterator(); iter.hasNext(); ) {
             final AttributeInstance dirtyInstance = iter.next();
             if ("attribute.name.generic.maxHealth".equals(dirtyInstance.getAttribute().getDescriptionId())) {
                 foundMax = true;
-                modifiers = dirtyInstance.getModifiers();
+                attribute = dirtyInstance;
                 iter.remove();
                 break;
             }
         }
+
         if (!foundMax) {
             // Means we didn't find the max health attribute and need to fetch the modifiers from
             // the cached map because it wasn't marked dirty for some reason
-            modifiers = this.shadow$getAttribute(Attributes.MAX_HEALTH).getModifiers();
+            attribute = this.shadow$getAttribute(Attributes.MAX_HEALTH);
         }
 
-        final AttributeInstance attribute = new AttributeInstance(Attributes.MAX_HEALTH, i -> {});
         if (this.bridge$isHealthScaled()) {
-            attribute.setBaseValue(this.impl$healthScale);
+            final Collection<AttributeModifier> modifiers = attribute.getModifiers();
+
+            this.impl$cachedMaxHealthAttribute = new AttributeInstance(Attributes.MAX_HEALTH, i -> {});
+            this.impl$cachedMaxHealthAttribute.setBaseValue(this.impl$healthScale);
+
+            if (!modifiers.isEmpty()) {
+                modifiers.forEach(this.impl$cachedMaxHealthAttribute::addTransientModifier);
+            }
+        } else {
+            this.impl$cachedMaxHealthAttribute = attribute;
         }
 
-        if (!modifiers.isEmpty()) {
-            modifiers.forEach(attribute::addTransientModifier);
-        }
-        set.add(attribute);
+        set.add(this.impl$cachedMaxHealthAttribute);
     }
 
     @Override
@@ -140,31 +160,31 @@ public abstract class ServerPlayerMixin_HealthScale extends PlayerMixin implemen
 
     @Override
     public float bridge$getInternalScaledHealth() {
-        if (!this.bridge$isHealthScaled()) {
-            return this.shadow$getHealth();
+        float maximumHealth = this.shadow$getMaxHealth();
+        float healthScale = maximumHealth;
+
+        // Attribute modifiers from mods can add onto health and multiply health, we need to replicate
+        // what the mod may be trying to represent, regardless whether the health scale says to show
+        // only x hearts.
+        if (this.bridge$isHealthScaled()) {
+            final AttributeInstance attribute;
+            if (this.impl$cachedMaxHealthAttribute == null) {
+                final Collection<AttributeModifier> modifiers = this.shadow$getAttribute(Attributes.MAX_HEALTH).getModifiers();
+                attribute = new AttributeInstance(Attributes.MAX_HEALTH, i -> {});
+
+                attribute.setBaseValue(this.impl$healthScale);
+
+                if (!modifiers.isEmpty()) {
+                    modifiers.forEach(attribute::addTransientModifier);
+                }
+            } else {
+                attribute = this.impl$cachedMaxHealthAttribute;
+            }
+
+            healthScale = (float) attribute.getValue();
         }
-        if (this.impl$cachedModifiedHealth == -1) {
-            // Because attribute modifiers from mods can add onto health and multiply health, we
-            // need to replicate what the mod may be trying to represent, regardless whether the health scale
-            // says to show only x hearts.
-            final AttributeInstance maxAttribute = this.shadow$getAttribute(Attributes.MAX_HEALTH);
-            double modifiedScale = this.impl$healthScale;
-            // Apply additive modifiers
-            for (final AttributeModifier modifier : maxAttribute.getModifiers(AttributeModifier.Operation.ADDITION)) {
-                modifiedScale += modifier.getAmount();
-            }
 
-            for (final AttributeModifier modifier : maxAttribute.getModifiers(AttributeModifier.Operation.MULTIPLY_BASE)) {
-                modifiedScale += modifiedScale * modifier.getAmount();
-            }
-
-            for (final AttributeModifier modifier : maxAttribute.getModifiers(AttributeModifier.Operation.MULTIPLY_TOTAL)) {
-                modifiedScale *= 1.0D + modifier.getAmount();
-            }
-
-            this.impl$cachedModifiedHealth = (float) modifiedScale;
-        }
-        return (this.shadow$getHealth() / this.shadow$getMaxHealth()) * this.impl$cachedModifiedHealth;
+        return (this.shadow$getHealth() / maximumHealth) * healthScale;
     }
 
     @Override
@@ -173,5 +193,3 @@ public abstract class ServerPlayerMixin_HealthScale extends PlayerMixin implemen
     }
 
 }
-
-

@@ -24,6 +24,7 @@
  */
 package org.spongepowered.common.entity;
 
+import net.minecraft.nbt.CompoundTag;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
@@ -52,8 +53,6 @@ import java.lang.ref.WeakReference;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-
-import net.minecraft.nbt.CompoundTag;
 
 public final class SpongeEntitySnapshotBuilder extends AbstractDataBuilder<EntitySnapshot> implements EntitySnapshot.Builder {
 
@@ -230,7 +229,7 @@ public final class SpongeEntitySnapshotBuilder extends AbstractDataBuilder<Entit
         this.rotation = DataUtil.getPosition3d(container, Constants.Entity.ROTATION);
         this.scale = DataUtil.getPosition3d(container, Constants.Entity.SCALE);
         final String entityTypeId = container.getString(Constants.Entity.TYPE).get();
-        this.entityType = Sponge.game().registries().registry(RegistryTypes.ENTITY_TYPE).value(ResourceKey.resolve(entityTypeId));
+        this.entityType = Sponge.game().registry(RegistryTypes.ENTITY_TYPE).value(ResourceKey.resolve(entityTypeId));
         this.manipulator = null; // lazy read from nbt
         if (container.contains(Constants.Sponge.UNSAFE_NBT)) {
             this.compound = NBTTranslator.INSTANCE.translate(container.getView(Constants.Sponge.UNSAFE_NBT).get());

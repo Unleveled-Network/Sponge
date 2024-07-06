@@ -39,14 +39,12 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.ServerResources;
 import net.minecraft.server.ServerScoreboard;
-import net.minecraft.server.TickTask;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.progress.ChunkProgressListenerFactory;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.server.players.GameProfileCache;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.util.Mth;
-import net.minecraft.util.thread.ReentrantBlockableEventLoop;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import net.minecraft.world.level.storage.WorldData;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -59,12 +57,11 @@ import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.item.recipe.RecipeManager;
 import org.spongepowered.api.map.MapStorage;
 import org.spongepowered.api.profile.GameProfileManager;
-import org.spongepowered.api.registry.RegistryHolder;
-import org.spongepowered.api.registry.RegistryScope;
+import org.spongepowered.api.resource.ResourceManager;
 import org.spongepowered.api.resourcepack.ResourcePack;
 import org.spongepowered.api.scoreboard.Scoreboard;
 import org.spongepowered.api.service.ServiceProvider;
-import org.spongepowered.api.user.UserManager;
+import org.spongepowered.api.util.Ticks;
 import org.spongepowered.api.world.difficulty.Difficulty;
 import org.spongepowered.api.world.storage.ChunkLayout;
 import org.spongepowered.api.world.teleport.TeleportHelper;
@@ -86,6 +83,7 @@ import org.spongepowered.common.command.manager.SpongeCommandManager;
 import org.spongepowered.common.event.tracking.PhaseTracker;
 import org.spongepowered.common.map.SpongeMapStorage;
 import org.spongepowered.common.profile.SpongeGameProfileManager;
+import org.spongepowered.common.registry.RegistryHolderLogic;
 import org.spongepowered.common.registry.SpongeRegistryHolder;
 import org.spongepowered.common.scheduler.ServerScheduler;
 import org.spongepowered.common.user.SpongeUserManager;
@@ -103,13 +101,15 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+@SuppressWarnings("rawtypes")
 @Mixin(MinecraftServer.class)
-@Implements(value = @Interface(iface = Server.class, prefix = "server$"))
-public abstract class MinecraftServerMixin_API extends ReentrantBlockableEventLoop<TickTask> implements SpongeServer {
+@Implements(value = @Interface(iface = Server.class, prefix = "server$", remap = Interface.Remap.NONE))
+public abstract class MinecraftServerMixin_API implements SpongeServer, SpongeRegistryHolder {
 
     // @formatter:off
     @Shadow @Final public long[] tickTimes;
     @Shadow @Final protected WorldData worldData;
+    @Shadow private ServerResources resources;
 
     @Shadow public abstract net.minecraft.world.item.crafting.RecipeManager shadow$getRecipeManager();
     @Shadow public abstract PlayerList shadow$getPlayerList();
@@ -127,6 +127,7 @@ public abstract class MinecraftServerMixin_API extends ReentrantBlockableEventLo
     @Shadow public abstract boolean shadow$isSpawningAnimals();
     @Shadow public abstract boolean shadow$isNetherEnabled();
     @Shadow public abstract Commands shadow$getCommands();
+    @Shadow public abstract PackRepository shadow$getPackRepository();
     // @formatter:on
 
     private Iterable<? extends Audience> audiences;
@@ -136,14 +137,10 @@ public abstract class MinecraftServerMixin_API extends ReentrantBlockableEventLo
     private UsernameCache api$usernameCache;
     private Audience api$broadcastAudience;
     private ServerScoreboard api$scoreboard;
-    private GameProfileManager api$profileManager;
-    private SpongeUserManager api$userManager;
+    private SpongeGameProfileManager api$profileManager;
     private MapStorage api$mapStorage;
-    private RegistryHolder api$registryHolder;
-
-    public MinecraftServerMixin_API(final String name) {
-        super(name);
-    }
+    private RegistryHolderLogic api$registryHolder;
+    private SpongeUserManager api$userManager;
 
     @Inject(method = "<init>", at = @At("TAIL"))
     public void api$initializeSpongeFields(final Thread p_i232576_1_, final RegistryAccess.RegistryHolder p_i232576_2_,
@@ -155,10 +152,12 @@ public abstract class MinecraftServerMixin_API extends ReentrantBlockableEventLo
         this.api$scheduler = new ServerScheduler();
         this.api$playerDataHandler = new SpongePlayerDataManager(this);
         this.api$teleportHelper = new SpongeTeleportHelper();
-        this.api$userManager = new SpongeUserManager(this);
         this.api$mapStorage = new SpongeMapStorage();
-        this.api$registryHolder = new SpongeRegistryHolder(p_i232576_2_);
+        this.api$registryHolder = new RegistryHolderLogic(p_i232576_2_);
+        this.api$userManager = new SpongeUserManager((MinecraftServer) (Object) this);
     }
+
+
 
     @Override
     public RecipeManager recipeManager() {
@@ -258,7 +257,7 @@ public abstract class MinecraftServerMixin_API extends ReentrantBlockableEventLo
     }
 
     @Override
-    public UserManager userManager() {
+    public SpongeUserManager userManager() {
         return this.api$userManager;
     }
 
@@ -306,8 +305,8 @@ public abstract class MinecraftServerMixin_API extends ReentrantBlockableEventLo
     }
 
     @Override
-    public int runningTimeTicks() {
-        return this.shadow$getTickCount();
+    public @NonNull Ticks runningTimeTicks() {
+        return Ticks.of(this.shadow$getTickCount());
     }
 
     @Override
@@ -347,6 +346,11 @@ public abstract class MinecraftServerMixin_API extends ReentrantBlockableEventLo
             this.api$profileManager = new SpongeGameProfileManager(this);
         }
 
+        return this.api$profileManager;
+    }
+
+    @Override
+    public SpongeGameProfileManager gameProfileManagerIfPresent() {
         return this.api$profileManager;
     }
 
@@ -393,13 +397,23 @@ public abstract class MinecraftServerMixin_API extends ReentrantBlockableEventLo
     }
 
     @Override
+    public org.spongepowered.api.resource.pack.PackRepository packRepository() {
+        return (org.spongepowered.api.resource.pack.PackRepository) this.shadow$getPackRepository();
+    }
+
+    @Override
+    public ResourceManager resourceManager() {
+        return (ResourceManager) this.resources.getResourceManager();
+    }
+
+    @Override
     public ServerScheduler scheduler() {
         return this.api$scheduler;
     }
 
     @Override
     public boolean onMainThread() {
-        return this.isSameThread();
+        return ((MinecraftServer) (Object) this).isSameThread();
     }
 
     @Override
@@ -432,17 +446,12 @@ public abstract class MinecraftServerMixin_API extends ReentrantBlockableEventLo
     }
 
     @Override
-    public RegistryScope registryScope() {
-        return RegistryScope.ENGINE;
-    }
-
-    @Override
-    public RegistryHolder registries() {
-        return this.api$registryHolder;
-    }
-
-    @Override
     public MapStorage mapStorage() {
         return this.api$mapStorage;
+    }
+
+    @Override
+    public RegistryHolderLogic registryHolder() {
+        return this.api$registryHolder;
     }
 }

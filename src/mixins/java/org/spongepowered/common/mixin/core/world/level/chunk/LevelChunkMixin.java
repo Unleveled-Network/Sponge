@@ -40,8 +40,6 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.UpgradeData;
 import net.minecraft.world.level.material.Fluid;
-import org.spongepowered.api.Sponge;
-import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.util.Direction;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -52,7 +50,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.common.accessor.server.level.ChunkMapAccessor;
 import org.spongepowered.common.applaunch.config.core.SpongeConfigs;
 import org.spongepowered.common.bridge.CreatorTrackedBridge;
-import org.spongepowered.common.bridge.world.WorldBridge;
+import org.spongepowered.common.bridge.world.level.LevelBridge;
 import org.spongepowered.common.bridge.world.level.chunk.CacheKeyBridge;
 import org.spongepowered.common.bridge.world.level.chunk.LevelChunkBridge;
 import org.spongepowered.common.bridge.world.level.storage.PrimaryLevelDataBridge;
@@ -66,6 +64,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiConsumer;
@@ -85,9 +84,9 @@ public abstract class LevelChunkMixin implements LevelChunkBridge, CacheKeyBridg
     @Shadow private boolean loaded;
     @Shadow private boolean unsaved;
 
-    @Shadow @Nullable public abstract BlockEntity getBlockEntity(BlockPos pos, net.minecraft.world.level.chunk.LevelChunk.EntityCreationType p_177424_2_);
-
-    @Shadow public abstract BlockState getBlockState(BlockPos pos);
+    @Shadow @Nullable public abstract BlockEntity shadow$getBlockEntity(BlockPos pos, net.minecraft.world.level.chunk.LevelChunk.EntityCreationType p_177424_2_);
+    @Shadow public abstract BlockState shadow$getBlockState(BlockPos pos);
+    @Shadow public abstract void shadow$addEntity(net.minecraft.world.entity.Entity param0);
     // @formatter:on
 
     private long impl$scheduledForUnload = -1; // delay chunk unloads
@@ -160,11 +159,11 @@ public abstract class LevelChunkMixin implements LevelChunkBridge, CacheKeyBridg
     }
 
     @Override
-    public void bridge$addTrackedBlockPosition(final Block block, final BlockPos pos, final User user, final PlayerTracker.Type trackerType) {
-        if (((WorldBridge) this.level).bridge$isFake()) {
+    public void bridge$addTrackedBlockPosition(final Block block, final BlockPos pos, final UUID uuid, final PlayerTracker.Type trackerType) {
+        if (((LevelBridge) this.level).bridge$isFake()) {
             return;
         }
-        if (!PhaseTracker.getInstance().getCurrentState().tracksCreatorsAndNotifiers()) {
+        if (!PhaseTracker.getInstance().getPhaseContext().tracksCreatorsAndNotifiers()) {
             // Don't track chunk gen
             return;
         }
@@ -177,37 +176,31 @@ public abstract class LevelChunkMixin implements LevelChunkBridge, CacheKeyBridg
             if (blockEntity instanceof CreatorTrackedBridge) {
                 final CreatorTrackedBridge trackedBlockEntity = (CreatorTrackedBridge) blockEntity;
                 if (trackerType == PlayerTracker.Type.NOTIFIER) {
-                    if (trackedBlockEntity.tracked$getNotifierReference().orElse(null) == user) {
+                    if (Objects.equals(trackedBlockEntity.tracker$getNotifierUUID().orElse(null), uuid)) {
                         return;
                     }
-                    trackedBlockEntity.tracked$setNotifier(user);
+                    trackedBlockEntity.tracker$setTrackedUUID(PlayerTracker.Type.NOTIFIER, uuid);
                 } else {
-                    if (trackedBlockEntity.tracked$getCreatorReference().orElse(null) == user) {
+                    if (Objects.equals(trackedBlockEntity.tracker$getCreatorUUID().orElse(null), uuid)) {
                         return;
                     }
-                    trackedBlockEntity.tracked$setCreatorReference(user);
+                    trackedBlockEntity.tracker$setTrackedUUID(PlayerTracker.Type.CREATOR, uuid);
                 }
             }
         }
 
         if (trackerType == PlayerTracker.Type.CREATOR) {
-            this.impl$setTrackedUUID(pos, user.uniqueId(), trackerType, (pt, idx) -> {
+            this.impl$setTrackedUUID(pos, uuid, trackerType, (pt, idx) -> {
                 pt.creatorindex = idx;
                 pt.notifierIndex = idx;
             });
         } else {
-            this.impl$setTrackedUUID(pos, user.uniqueId(), trackerType, (pt, idx) -> pt.notifierIndex = idx);
+            this.impl$setTrackedUUID(pos, uuid, trackerType, (pt, idx) -> pt.notifierIndex = idx);
         }
     }
 
-    @Override
-    public Optional<User> bridge$getBlockCreator(final BlockPos pos) {
-        final Optional<UUID> uuid = this.bridge$getBlockCreatorUUID(pos);
-        return uuid.flatMap(this::impl$getValidatedUser);
-    }
-
     public Optional<UUID> bridge$trackedUUID(final BlockPos pos, final Function<PlayerTracker, Integer> func) {
-        if (((WorldBridge) this.level).bridge$isFake()) {
+        if (((LevelBridge) this.level).bridge$isFake()) {
             return Optional.empty();
         }
 
@@ -232,12 +225,6 @@ public abstract class LevelChunkMixin implements LevelChunkBridge, CacheKeyBridg
     }
 
     @Override
-    public Optional<User> bridge$getBlockNotifier(final BlockPos pos) {
-        final Optional<UUID> uuid = this.bridge$getBlockNotifierUUID(pos);
-        return uuid.flatMap(this::impl$getValidatedUser);
-    }
-
-    @Override
     public Optional<UUID> bridge$getBlockNotifierUUID(final BlockPos pos) {
         return this.bridge$trackedUUID(pos, pt -> pt.notifierIndex);
     }
@@ -252,7 +239,7 @@ public abstract class LevelChunkMixin implements LevelChunkBridge, CacheKeyBridg
     }
 
     private void impl$setTrackedUUID(final BlockPos pos, final UUID uuid, final PlayerTracker.Type type, final BiConsumer<PlayerTracker, Integer> consumer) {
-        if (((WorldBridge) this.level).bridge$isFake()) {
+        if (((LevelBridge) this.level).bridge$isFake()) {
             return;
         }
         final PrimaryLevelDataBridge worldInfo = (PrimaryLevelDataBridge) this.level.getLevelData();
@@ -274,10 +261,6 @@ public abstract class LevelChunkMixin implements LevelChunkBridge, CacheKeyBridg
     @Override
     public void bridge$setBlockCreator(final BlockPos pos, @Nullable final UUID uuid) {
         this.impl$setTrackedUUID(pos, uuid, PlayerTracker.Type.CREATOR, (pt, idx) -> pt.creatorindex = idx);
-    }
-
-    private Optional<User> impl$getValidatedUser(final UUID uuid) {
-        return Sponge.server().userManager().find(uuid);
     }
 
     private Optional<UUID> impl$getValidatedUUID(final int key, final int ownerIndex) {
@@ -368,6 +351,21 @@ public abstract class LevelChunkMixin implements LevelChunkBridge, CacheKeyBridg
     @Override
     public long bridge$getCacheKey() {
         return this.impl$cacheKey;
+    }
+
+    @Override
+    public boolean bridge$spawnEntity(final org.spongepowered.api.entity.Entity entity) {
+        final net.minecraft.world.entity.Entity mcEntity = (net.minecraft.world.entity.Entity) entity;
+        final BlockPos blockPos = mcEntity.blockPosition();
+        if (this.chunkPos.x == blockPos.getX() >> 4 && this.chunkPos.z == blockPos.getZ() >> 4) {
+            // Calling addEntity on the chunk only adds them to storage,
+            // we need to redirect this to add to the world.
+            //
+            // See https://github.com/SpongePowered/Sponge/issues/3488
+            this.level.addFreshEntity(mcEntity);
+            return true;
+        }
+        return false;
     }
 
 }

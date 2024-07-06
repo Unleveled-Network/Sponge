@@ -24,6 +24,13 @@
  */
 package org.spongepowered.common.mixin.core.world.item;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.LevelReader;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.spongepowered.api.data.DataTransactionResult;
 import org.spongepowered.api.data.Key;
@@ -32,30 +39,22 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.spongepowered.common.bridge.data.SpongeDataHolderBridge;
 import org.spongepowered.common.bridge.data.DataCompoundHolder;
-import org.spongepowered.common.bridge.world.WorldBridge;
+import org.spongepowered.common.bridge.data.DataHolderProcessor;
+import org.spongepowered.common.bridge.data.SpongeDataHolderBridge;
+import org.spongepowered.common.bridge.world.item.ItemStackBridge;
 import org.spongepowered.common.data.DataUtil;
 import org.spongepowered.common.data.provider.nbt.NBTDataType;
 import org.spongepowered.common.data.provider.nbt.NBTDataTypes;
-import org.spongepowered.common.event.tracking.PhaseContext;
-import org.spongepowered.common.event.tracking.PhaseTracker;
 
-import javax.annotation.Nullable;
-import net.minecraft.core.BlockPos;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
 import java.util.Optional;
 
+import javax.annotation.Nullable;
+
 @Mixin(net.minecraft.world.item.ItemStack.class)
-public abstract class ItemStackMixin implements SpongeDataHolderBridge, DataCompoundHolder {
+public abstract class ItemStackMixin implements ItemStackBridge, SpongeDataHolderBridge, DataCompoundHolder {
 
     // @formatter:off
     @Shadow private boolean emptyCacheFlag;
@@ -66,11 +65,13 @@ public abstract class ItemStackMixin implements SpongeDataHolderBridge, DataComp
     // @formatter:on
 
     @Override
-    public <E> DataTransactionResult bridge$offer(final Key<@NonNull ? extends Value<E>> key, final E value) {
-        if (this.emptyCacheFlag) {
-            return DataTransactionResult.failNoData();
-        }
-        return SpongeDataHolderBridge.super.bridge$offer(key, value);
+    public InteractionResult bridge$onItemUseFirst(UseOnContext context) {
+        return InteractionResult.PASS;
+    }
+
+    @Override
+    public boolean bridge$doesSneakBypassUse(LevelReader world, BlockPos pos, Player player) {
+        return false;
     }
 
     @Override
@@ -78,7 +79,15 @@ public abstract class ItemStackMixin implements SpongeDataHolderBridge, DataComp
         if (this.emptyCacheFlag) {
             return Optional.empty();
         }
-        return SpongeDataHolderBridge.super.bridge$get(key);
+        return DataHolderProcessor.bridge$get(this, key);
+    }
+
+    @Override
+    public <E> DataTransactionResult bridge$offer(final Key<@NonNull ? extends Value<E>> key, final E value) {
+        if (this.emptyCacheFlag) {
+            return DataTransactionResult.failNoData();
+        }
+        return DataHolderProcessor.bridge$offer(this, key, value);
     }
 
     @Override
@@ -86,7 +95,7 @@ public abstract class ItemStackMixin implements SpongeDataHolderBridge, DataComp
         if (this.emptyCacheFlag) {
             return DataTransactionResult.failNoData();
         }
-        return SpongeDataHolderBridge.super.bridge$remove(key);
+        return DataHolderProcessor.bridge$remove(this, key);
     }
 
     @Override
@@ -133,25 +142,6 @@ public abstract class ItemStackMixin implements SpongeDataHolderBridge, DataComp
         if (compound != null && !compound.isEmpty()) {
             DataUtil.syncTagToData(this); // Deserialize
             DataUtil.syncDataToTag(this); // Sync back after reading
-        }
-    }
-
-
-    @Inject(method = "mineBlock", at = @At("HEAD"))
-    private void impl$capturePlayerUsingItemstack(final Level worldIn, final BlockState blockIn, final BlockPos pos, final Player playerIn,
-        final CallbackInfo ci) {
-        if (!((WorldBridge) worldIn).bridge$isFake()) {
-            final PhaseContext<@NonNull ?> context = PhaseTracker.getInstance().getPhaseContext();
-            context.capturePlayerUsingStackToBreakBlock((org.spongepowered.api.item.inventory.ItemStack) this, (ServerPlayer) playerIn);
-        }
-    }
-
-    @Inject(method = "mineBlock", at = @At("RETURN"))
-    private void impl$nullOutCapturedPlayer(final Level worldIn, final BlockState blockIn, final BlockPos pos, final Player playerIn,
-        final CallbackInfo ci) {
-        if (!((WorldBridge) worldIn).bridge$isFake()) {
-            final PhaseContext<@NonNull ?> context = PhaseTracker.getInstance().getPhaseContext();
-            context.capturePlayerUsingStackToBreakBlock((org.spongepowered.api.item.inventory.ItemStack) this, null);
         }
     }
 

@@ -26,7 +26,7 @@ package org.spongepowered.common.inventory.lens.impl.slot;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import org.spongepowered.api.data.Key;
+import net.minecraft.world.item.ItemStack;
 import org.spongepowered.api.item.inventory.Inventory;
 import org.spongepowered.api.item.inventory.Slot;
 import org.spongepowered.common.inventory.adapter.impl.slots.SlotAdapter;
@@ -39,8 +39,6 @@ import org.spongepowered.common.inventory.lens.slots.SlotLens;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import net.minecraft.world.item.ItemStack;
 
 /**
  * Base Lens for Slots
@@ -105,11 +103,6 @@ public class BasicSlotLens extends AbstractLens implements SlotLens {
     @Override
     public Lens getLens(int index) {
         return this;
-    }
-
-    @Override
-    public Map<Key<?>, Object> getDataAt(int index) {
-        return Collections.emptyMap();
     }
 
     @Override

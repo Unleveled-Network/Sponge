@@ -25,8 +25,13 @@
 package org.spongepowered.common.registry.provider;
 
 import net.kyori.adventure.text.Component;
+import net.minecraft.nbt.CompoundTag;
 import org.spongepowered.api.data.persistence.DataTranslator;
+import org.spongepowered.api.util.Direction;
+import org.spongepowered.api.world.schematic.Schematic;
 import org.spongepowered.common.data.persistence.DataSerializers;
+import org.spongepowered.common.data.persistence.NBTTranslator;
+import org.spongepowered.common.world.schematic.SchematicTranslator;
 import org.spongepowered.math.imaginary.Complexd;
 import org.spongepowered.math.imaginary.Complexf;
 import org.spongepowered.math.imaginary.Quaterniond;
@@ -84,7 +89,10 @@ public final class DataTranslatorProvider {
         this.mappings.put(LocalDateTime.class, DataSerializers.LOCAL_DATE_TIME_DATA_SERIALIZER);
         this.mappings.put(Instant.class, DataSerializers.INSTANT_DATA_SERIALIZER);
         this.mappings.put(ZonedDateTime.class, DataSerializers.ZONED_DATE_TIME_DATA_SERIALIZER);
-        this.mappings.put(Month.class, DataSerializers.MONTH_DATA_SERIALIZER);        
+        this.mappings.put(Month.class, DataSerializers.MONTH_DATA_SERIALIZER);
+        this.mappings.put(CompoundTag.class, NBTTranslator.INSTANCE);
+        this.mappings.put(Schematic.class, SchematicTranslator.get());
+        this.mappings.put(Direction.class, DataSerializers.DIRECTION_SERIALIZER);
     }
 
 
@@ -92,5 +100,13 @@ public final class DataTranslatorProvider {
     public <T> Optional<DataTranslator<T>> getSerializer(Class clazz) {
         final DataTranslator dataTranslator = this.mappings.get(clazz);
         return Optional.ofNullable((DataTranslator<T>) dataTranslator);
+    }
+
+    public <T> void register(final Class<T> objectClass, final DataTranslator<T> translator) {
+        if (!this.mappings.containsKey(objectClass)) {
+            this.mappings.put(objectClass, translator);
+        } else {
+            throw new IllegalArgumentException("DataTranslator already registered for " + objectClass);
+        }
     }
 }

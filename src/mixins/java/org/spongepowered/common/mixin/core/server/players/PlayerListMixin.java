@@ -54,6 +54,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.border.BorderChangeListener;
 import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.Logger;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.api.Sponge;
@@ -71,6 +72,7 @@ import org.spongepowered.api.service.ban.Ban;
 import org.spongepowered.api.service.permission.PermissionService;
 import org.spongepowered.api.service.permission.Subject;
 import org.spongepowered.api.world.server.ServerLocation;
+import org.spongepowered.api.world.server.ServerWorld;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
@@ -83,17 +85,24 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.common.SpongeCommon;
 import org.spongepowered.common.SpongeServer;
-import org.spongepowered.common.accessor.network.protocol.game.ClientboundRespawnPacketAccessor;
+import org.spongepowered.common.accessor.network.protocol.game.ClientboundPlayerInfoPacketAccessor;
 import org.spongepowered.common.adventure.SpongeAdventure;
+import org.spongepowered.common.bridge.client.server.IntegratedPlayerListBridge;
+import org.spongepowered.common.bridge.data.VanishableBridge;
 import org.spongepowered.common.bridge.network.ConnectionBridge;
-import org.spongepowered.common.bridge.server.level.ServerPlayerBridge;
 import org.spongepowered.common.bridge.server.ServerScoreboardBridge;
-import org.spongepowered.common.bridge.server.players.PlayerListBridge;
 import org.spongepowered.common.bridge.server.level.ServerLevelBridge;
+import org.spongepowered.common.bridge.server.level.ServerPlayerBridge;
+import org.spongepowered.common.bridge.server.players.PlayerListBridge;
 import org.spongepowered.common.bridge.world.level.storage.PrimaryLevelDataBridge;
 import org.spongepowered.common.entity.player.LoginPermissions;
-import org.spongepowered.common.entity.player.SpongeUser;
+import org.spongepowered.common.entity.player.SpongeUserView;
+import org.spongepowered.common.event.tracking.PhaseContext;
 import org.spongepowered.common.event.tracking.PhaseTracker;
+import org.spongepowered.common.event.tracking.context.transaction.EffectTransactor;
+import org.spongepowered.common.event.tracking.context.transaction.TransactionalCaptureSupplier;
+import org.spongepowered.common.event.tracking.context.transaction.effect.BroadcastInventoryChangesEffect;
+import org.spongepowered.common.event.tracking.context.transaction.inventory.PlayerInventoryTransaction;
 import org.spongepowered.common.profile.SpongeGameProfile;
 import org.spongepowered.common.server.PerWorldBorderListener;
 import org.spongepowered.common.service.server.ban.SpongeIPBanList;
@@ -101,7 +110,6 @@ import org.spongepowered.common.service.server.ban.SpongeUserBanList;
 import org.spongepowered.common.service.server.whitelist.SpongeUserWhiteList;
 import org.spongepowered.common.util.Constants;
 import org.spongepowered.common.util.NetworkUtil;
-import org.spongepowered.common.util.VecHelper;
 import org.spongepowered.math.vector.Vector3d;
 
 import java.net.InetAddress;
@@ -109,7 +117,9 @@ import java.net.SocketAddress;
 import java.net.UnknownHostException;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
+import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -130,6 +140,7 @@ public abstract class PlayerListMixin implements PlayerListBridge {
     @Shadow @Final @Mutable private UserWhiteList whitelist;
     @Shadow @Final private List<net.minecraft.server.level.ServerPlayer> players;
     @Shadow @Final protected int maxPlayers;
+    @Shadow @Final private Map<UUID, net.minecraft.server.level.ServerPlayer> playersByUUID;
 
     @Shadow public abstract MinecraftServer shadow$getServer();
     @Shadow @Nullable public abstract CompoundTag shadow$load(net.minecraft.server.level.ServerPlayer playerIn);
@@ -137,8 +148,7 @@ public abstract class PlayerListMixin implements PlayerListBridge {
     // @formatter:on
 
     private boolean impl$isGameMechanicRespawn = false;
-    ResourceKey<Level> impl$newDestination = null;
-    ResourceKey<Level> impl$originalDestination = null;
+    private ResourceKey<Level> impl$originalRespawnDestination = null;
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void impl$setSpongeLists(final CallbackInfo callbackInfo) {
@@ -148,47 +158,46 @@ public abstract class PlayerListMixin implements PlayerListBridge {
     }
 
     @Override
-    public void bridge$setOriginalDestinationDimension(final ResourceKey<Level> dimension) {
-        this.impl$originalDestination = dimension;
+    public CompletableFuture<net.minecraft.network.chat.Component> bridge$canPlayerLogin(final SocketAddress param0, final com.mojang.authlib.GameProfile param1) {
+        if (this instanceof IntegratedPlayerListBridge) {
+            return ((IntegratedPlayerListBridge) this).bridge$canPlayerLoginClient(param0, param1);
+        }
+        return this.impl$canPlayerLoginServer(param0, param1);
     }
 
-    @Override
-    public void bridge$setNewDestinationDimension(final ResourceKey<Level> dimension) {
-        this.impl$newDestination = dimension;
-    }
-
-    @Override
-    public CompletableFuture<Optional<net.minecraft.network.chat.Component>> bridge$canPlayerLogin(final SocketAddress param0, final com.mojang.authlib.GameProfile param1) {
+    protected final CompletableFuture<net.minecraft.network.chat.Component> impl$canPlayerLoginServer(final SocketAddress param0, final com.mojang.authlib.GameProfile param1) {
         final SpongeGameProfile profile = SpongeGameProfile.basicOf(param1);
 
-        return Sponge.server().serviceProvider().banService().banFor(profile).<Optional<net.minecraft.network.chat.Component>>thenCompose(profileBanOpt -> {
+        return Sponge.server().serviceProvider().banService().find(profile).thenCompose(profileBanOpt -> {
             if (profileBanOpt.isPresent()) {
                 final Ban.Profile var0 = profileBanOpt.get();
                 final MutableComponent var1 = new TranslatableComponent("multiplayer.disconnect.banned.reason", var0.reason().orElse(Component.empty()));
                 if (var0.expirationDate().isPresent()) {
-                    var1.append(new TranslatableComponent("multiplayer.disconnect.banned.expiration", BAN_DATE_FORMAT.format(var0.expirationDate().get())));
+                    Date date = Date.from(var0.expirationDate().get());
+                    var1.append(new TranslatableComponent("multiplayer.disconnect.banned.expiration", BAN_DATE_FORMAT.format(date)));
                 }
-                return CompletableFuture.completedFuture(Optional.of(var1));
+                return CompletableFuture.completedFuture(var1);
             }
 
             if (param0 instanceof LocalAddress) { // don't bother looking up IP bans on local address
-                return CompletableFuture.completedFuture(Optional.empty());
+                return CompletableFuture.completedFuture(null);
             }
 
             final InetAddress address;
             try {
                 address = InetAddress.getByName(NetworkUtil.getHostString(param0));
             } catch (final UnknownHostException ex) {
-                return CompletableFuture.completedFuture(Optional.of(new TextComponent(ex.getMessage()))); // no
+                return CompletableFuture.completedFuture(new TextComponent(ex.getMessage())); // no
             }
-            return Sponge.server().serviceProvider().banService().banFor(address).thenCompose(ipBanOpt -> {
+            return Sponge.server().serviceProvider().banService().find(address).thenCompose(ipBanOpt -> {
                 if (ipBanOpt.isPresent()) {
                     final Ban.IP var2 = ipBanOpt.get();
                     final MutableComponent var3 = new TranslatableComponent("multiplayer.disconnect.banned_ip.reason", var2.reason().orElse(Component.empty()));
                     if (var2.expirationDate().isPresent()) {
-                        var3.append(new TranslatableComponent("multiplayer.disconnect.banned_ip.expiration", BAN_DATE_FORMAT.format(var2.expirationDate().get())));
+                        Date date = Date.from(var2.expirationDate().get());
+                        var3.append(new TranslatableComponent("multiplayer.disconnect.banned_ip.expiration", BAN_DATE_FORMAT.format(date)));
                     }
-                    return CompletableFuture.completedFuture(Optional.of(var3));
+                    return CompletableFuture.completedFuture(var3);
                 }
 
                 return CompletableFuture.supplyAsync(() -> {
@@ -203,24 +212,24 @@ public abstract class PlayerListMixin implements PlayerListBridge {
                     return subject.hasPermission(LoginPermissions.BYPASS_WHITELIST_PERMISSION);
                 }, SpongeCommon.server()).thenCompose(w -> {
                     if (w) {
-                        return CompletableFuture.completedFuture(Optional.empty());
+                        return CompletableFuture.completedFuture(null);
                     }
-                    return Sponge.server().serviceProvider().whitelistService().isWhitelisted(profile).thenCompose(whitelisted -> {
+                    return Sponge.server().serviceProvider().whitelistService().isWhitelisted(profile).<net.minecraft.network.chat.Component>thenApply(whitelisted -> {
                         if (!whitelisted) {
-                            return CompletableFuture.completedFuture(Optional.of(new TranslatableComponent("multiplayer.disconnect.not_whitelisted")));
+                            return new TranslatableComponent("multiplayer.disconnect.not_whitelisted");
                         }
-                        return CompletableFuture.completedFuture(Optional.empty());
+                        return null;
                     });
                 });
             });
-        }).thenComposeAsync(componentOpt -> {
-            if (componentOpt.isPresent()) {
-                return CompletableFuture.completedFuture(componentOpt);
+        }).thenApplyAsync(component -> {
+            if (component != null) {
+                return component;
             }
             if (this.players.size() >= this.maxPlayers && !this.shadow$canBypassPlayerLimit(param1)) {
-                return CompletableFuture.completedFuture(Optional.of(new TranslatableComponent("multiplayer.disconnect.server_full")));
+                return new TranslatableComponent("multiplayer.disconnect.server_full");
             }
-            return CompletableFuture.completedFuture(Optional.empty());
+            return null;
         }, SpongeCommon.server());
     }
 
@@ -230,23 +239,15 @@ public abstract class PlayerListMixin implements PlayerListBridge {
         )
     )
     private CompoundTag impl$setPlayerDataForNewPlayers(final PlayerList playerList, final net.minecraft.server.level.ServerPlayer playerIn) {
-        final SpongeUser user = (SpongeUser) ((ServerPlayerBridge) playerIn).bridge$getUserObject();
-        if (user != null) {
-            if (SpongeUser.dirtyUsers.contains(user)) {
-                user.save();
-            }
-            user.invalidate();
-        }
-
         final CompoundTag compound = this.shadow$load(playerIn);
         if (compound == null) {
             ((SpongeServer) SpongeCommon.server()).getPlayerDataManager().setPlayerInfo(playerIn.getUUID(), Instant.now(), Instant.now());
         }
         return compound;
     }
-    
+
     @Redirect(method = "placeNewPlayer",
-        at = @At(value = "INVOKE", 
+        at = @At(value = "INVOKE",
             target = "Lnet/minecraft/server/MinecraftServer;getLevel(Lnet/minecraft/resources/ResourceKey;)Lnet/minecraft/server/level/ServerLevel;"
         )
     )
@@ -278,7 +279,9 @@ public abstract class PlayerListMixin implements PlayerListBridge {
         final Vector3d rotation = player.rotation();
         // player.connection() cannot be used here, because it's still be null at this point
         final ServerSideConnection connection = (ServerSideConnection) networkManager.getPacketListener();
-        final User user = player.user();
+
+        // The user is not yet in the player list, so we need to make special provision.
+        final User user = SpongeUserView.createLoginEventUser(player);
 
         final Cause cause = Cause.of(EventContext.empty(), connection, user);
         final ServerSideConnectionEvent.Login event = SpongeEventFactory.createServerSideConnectionEventLogin(cause, disconnectMessage,
@@ -337,6 +340,7 @@ public abstract class PlayerListMixin implements PlayerListBridge {
         ),
         at = @At(
             value = "INVOKE",
+            remap = false,
             target = "Ljava/lang/String;equalsIgnoreCase(Ljava/lang/String;)Z"
         )
     )
@@ -370,7 +374,8 @@ public abstract class PlayerListMixin implements PlayerListBridge {
             final long p_i242082_4_, final boolean p_i242082_6_, final Set<ResourceKey<Level>> p_i242082_7_,
             final RegistryAccess.RegistryHolder p_i242082_8_, final DimensionType p_i242082_9_, final ResourceKey<Level> p_i242082_10_,
             final int p_i242082_11_, final int p_i242082_12_, final boolean p_i242082_13_, final boolean p_i242082_14_,
-            final boolean p_i242082_15_, final boolean p_i242082_16_, Connection p_72355_1_, net.minecraft.server.level.ServerPlayer player) {
+            final boolean p_i242082_15_, final boolean p_i242082_16_, final Connection p_72355_1_,
+            final net.minecraft.server.level.ServerPlayer player) {
 
         return new ClientboundLoginPacket(p_i242082_1_, p_i242082_2_, p_i242082_3_, p_i242082_4_, p_i242082_6_, p_i242082_7_, p_i242082_8_, p_i242082_9_,
                 p_i242082_10_, p_i242082_11_, ((PrimaryLevelDataBridge) player.getLevel().getLevelData()).bridge$viewDistance().orElse(this.viewDistance),
@@ -386,6 +391,54 @@ public abstract class PlayerListMixin implements PlayerListBridge {
     @Redirect(method = "placeNewPlayer", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/players/PlayerList;updateEntireScoreboard(Lnet/minecraft/server/ServerScoreboard;Lnet/minecraft/server/level/ServerPlayer;)V"))
     private void impl$sendScoreboard(final PlayerList playerList, final ServerScoreboard scoreboardIn, final net.minecraft.server.level.ServerPlayer playerIn) {
         ((ServerPlayerBridge)playerIn).bridge$initScoreboard();
+    }
+
+    @Redirect(
+        method = "placeNewPlayer",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/server/players/PlayerList;broadcastAll(Lnet/minecraft/network/protocol/Packet;)V"
+        )
+    )
+    private void impl$sendScoreboard(final PlayerList playerList, final Packet<?> addPlayer,
+        final Connection playerConnection, final net.minecraft.server.level.ServerPlayer serverPlayer
+    ) {
+        if (((VanishableBridge) serverPlayer).bridge$vanishState().invisible()) {
+            return;
+        }
+        playerList.broadcastAll(addPlayer);
+    }
+
+    @Redirect(
+        method = "placeNewPlayer",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;send(Lnet/minecraft/network/protocol/Packet;)V"
+        ),
+        slice = @Slice(
+            from = @At(
+                value = "INVOKE",
+                target = "Ljava/util/List;size()I",
+                remap = false
+            ),
+            to = @At(
+                value = "INVOKE",
+                target = "Lnet/minecraft/server/level/ServerLevel;addNewPlayer(Lnet/minecraft/server/level/ServerPlayer;)V"
+            )
+        )
+    )
+    private void impl$onlySendAddPlayerForUnvanishedPlayers(ServerGamePacketListenerImpl connection, Packet<?> packet) {
+        ClientboundPlayerInfoPacketAccessor playerInfoPacketAccessor = (ClientboundPlayerInfoPacketAccessor) packet;
+
+        // size is always 1
+        VanishableBridge p = (VanishableBridge) this.playersByUUID.get(playerInfoPacketAccessor.accessor$entries().get(0).getProfile().getId());
+
+        // Effectively, don't notify new players of vanished players
+        if (p.bridge$vanishState().invisible()) {
+            return;
+        }
+
+        connection.send(packet);
     }
 
     @Inject(method = "placeNewPlayer", at = @At(value = "RETURN"))
@@ -404,6 +457,14 @@ public abstract class PlayerListMixin implements PlayerListBridge {
         }
 
         ((ServerPlayerBridge) mcPlayer).bridge$setConnectionMessageToSend(null);
+
+        final PhaseContext<?> context = PhaseTracker.SERVER.getPhaseContext();
+        PhaseTracker.SERVER.pushCause(event);
+        final TransactionalCaptureSupplier transactor = context.getTransactor();
+        transactor.logPlayerInventoryChange(mcPlayer, PlayerInventoryTransaction.EventCreator.STANDARD);
+        try (EffectTransactor ignored = BroadcastInventoryChangesEffect.transact(transactor)) {
+            mcPlayer.inventoryMenu.broadcastChanges(); // in case plugins modified it
+        }
     }
 
     @Redirect(method = "remove", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;getCustomBossEvents()Lnet/minecraft/server/bossevents/CustomBossEvents;"))
@@ -451,56 +512,64 @@ public abstract class PlayerListMixin implements PlayerListBridge {
             to = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;isDemo()Z")
         )
     )
-    private boolean impl$flagIfRespawnLocationIsGameMechanic(final Optional<?> optional) {
-        this.impl$isGameMechanicRespawn = optional.isPresent();
-        return this.impl$isGameMechanicRespawn;
+    private boolean impl$flagIfRespawnPositionIsGameMechanic(final Optional<Vec3> respawnPosition) {
+        this.impl$isGameMechanicRespawn = respawnPosition.isPresent();
+        return false; // force call of MinecraftServer#overworld which is redirected into impl$callRespawnPlayerSelectWorld
     }
 
-    @Redirect(method = "respawn",
-        at = @At(
-            value = "INVOKE",
-            target = "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;send(Lnet/minecraft/network/protocol/Packet;)V",
-            ordinal = 1
+    @Redirect(method = "respawn", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;overworld()Lnet/minecraft/server/level/ServerLevel;"))
+    private ServerLevel impl$callRespawnPlayerSelectWorld(final MinecraftServer server, final net.minecraft.server.level.ServerPlayer player) {
+        final ServerLevel playerRespawnDestination = server.getLevel(player.getRespawnDimension());
+        final ServerLevel originalDestination = playerRespawnDestination != null && this.impl$isGameMechanicRespawn ? playerRespawnDestination : server.overworld();
+        this.impl$originalRespawnDestination = originalDestination.dimension();
+
+        final RespawnPlayerEvent.SelectWorld event = SpongeEventFactory.createRespawnPlayerEventSelectWorld(PhaseTracker.getCauseStackManager().currentCause(),
+                (ServerWorld) originalDestination, (ServerWorld) player.getLevel(), (ServerWorld) originalDestination, (ServerPlayer) player);
+        SpongeCommon.post(event);
+
+        return (ServerLevel) event.destinationWorld();
+    }
+
+    @Redirect(
+        method = "respawn",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;getX()D"),
+        slice = @Slice(
+            from = @At(value = "NEW", target = "net/minecraft/network/protocol/game/ClientboundRespawnPacket"),
+            to = @At(value = "NEW", target = "net/minecraft/network/protocol/game/ClientboundSetDefaultSpawnPositionPacket")
         )
     )
-    private void impl$callRespawnPlayerRecreateEvent(
-        final ServerGamePacketListenerImpl serverPlayNetHandler, final Packet<?> packetIn, final net.minecraft.server.level.ServerPlayer originalPlayer, final boolean keepAllPlayerData) {
-        final net.minecraft.server.level.ServerPlayer recreatedPlayer = serverPlayNetHandler.player;
+    private double impl$callRespawnPlayerRecreateEvent(final net.minecraft.server.level.ServerPlayer newPlayer,
+            final net.minecraft.server.level.ServerPlayer player, final boolean keepAllPlayerData) {
+        final ServerPlayer originalPlayer = (ServerPlayer) player;
+        final ServerPlayer recreatedPlayer = (ServerPlayer) newPlayer;
 
-        final Vector3d originalPosition = VecHelper.toVector3d(originalPlayer.position());
-        final Vector3d destinationPosition = VecHelper.toVector3d(recreatedPlayer.position());
-        final org.spongepowered.api.world.server.ServerWorld originalWorld = (org.spongepowered.api.world.server.ServerWorld) originalPlayer.level;
-        final org.spongepowered.api.world.server.ServerWorld originalDestinationWorld = (org.spongepowered.api.world.server.ServerWorld) this.server.getLevel(this.impl$originalDestination == null ? Level.OVERWORLD : this.impl$originalDestination);
-        final org.spongepowered.api.world.server.ServerWorld destinationWorld = (org.spongepowered.api.world.server.ServerWorld) this.server.getLevel(this.impl$newDestination == null ? Level.OVERWORLD : this.impl$newDestination);
+        final Vector3d originalPosition = originalPlayer.position();
+        final Vector3d destinationPosition = recreatedPlayer.position();
+        final ServerWorld originalWorld = originalPlayer.world();
+        final ServerWorld destinationWorld = recreatedPlayer.world();
 
-        final RespawnPlayerEvent.Recreate event = SpongeEventFactory.createRespawnPlayerEventRecreate(PhaseTracker.getCauseStackManager().currentCause(), destinationPosition, originalWorld, originalPosition, destinationWorld, originalDestinationWorld, destinationPosition, (ServerPlayer) originalPlayer, (ServerPlayer) recreatedPlayer, this.impl$isGameMechanicRespawn, !keepAllPlayerData);
+        final RespawnPlayerEvent.Recreate event = SpongeEventFactory.createRespawnPlayerEventRecreate(PhaseTracker.getCauseStackManager().currentCause(),
+                destinationPosition, originalWorld, originalPosition, destinationWorld,
+                (ServerWorld) this.server.getLevel(this.impl$originalRespawnDestination),
+                destinationPosition, originalPlayer, recreatedPlayer, this.impl$isGameMechanicRespawn, !keepAllPlayerData);
         SpongeCommon.post(event);
-        recreatedPlayer.setPos(event.destinationPosition().x(), event.destinationPosition().y(), event.destinationPosition().z());
-        this.impl$isGameMechanicRespawn = false;
-        this.impl$originalDestination = null;
-        this.impl$newDestination = null;
 
-        final ServerLevel targetWorld = (ServerLevel) event.destinationWorld();
-        ((ServerPlayerBridge) recreatedPlayer).bridge$sendChangeDimension(
-            targetWorld.dimensionType(),
-            ((ClientboundRespawnPacketAccessor) packetIn).accessor$dimension(),
-            ((ClientboundRespawnPacketAccessor) packetIn).accessor$seed(),
-            recreatedPlayer.gameMode.getGameModeForPlayer(),
-            recreatedPlayer.gameMode.getPreviousGameModeForPlayer(),
-            targetWorld.isDebug(),
-            targetWorld.isFlat(),
-            keepAllPlayerData
-        );
+        this.impl$isGameMechanicRespawn = false;
+        newPlayer.setPos(event.destinationPosition().x(), event.destinationPosition().y(), event.destinationPosition().z());
+
+        return newPlayer.getX();
     }
 
     @Inject(method = "respawn", at = @At("RETURN"))
     private void impl$callRespawnPlayerPostEvent(final net.minecraft.server.level.ServerPlayer player, final boolean keepAllPlayerData, final CallbackInfoReturnable<net.minecraft.server.level.ServerPlayer> cir) {
-        final org.spongepowered.api.world.server.ServerWorld originalWorld = (org.spongepowered.api.world.server.ServerWorld) player.level;
-        final org.spongepowered.api.world.server.ServerWorld originalDestinationWorld = (org.spongepowered.api.world.server.ServerWorld) this.server.getLevel(this.impl$originalDestination == null ? Level.OVERWORLD : this.impl$originalDestination);
-        final org.spongepowered.api.world.server.ServerWorld destinationWorld = (org.spongepowered.api.world.server.ServerWorld) this.server.getLevel(this.impl$newDestination == null ? Level.OVERWORLD : this.impl$newDestination);
+        final ServerPlayer recreatedPlayer = (ServerPlayer) cir.getReturnValue();
+        final ServerWorld originalWorld = (ServerWorld) player.level;
 
-        final RespawnPlayerEvent.Post event = SpongeEventFactory.createRespawnPlayerEventPost(PhaseTracker.getCauseStackManager().currentCause(), destinationWorld, originalWorld, originalDestinationWorld, (ServerPlayer) cir.getReturnValue());
+        final RespawnPlayerEvent.Post event = SpongeEventFactory.createRespawnPlayerEventPost(PhaseTracker.getCauseStackManager().currentCause(),
+                recreatedPlayer.world(), originalWorld, (ServerWorld) this.server.getLevel(this.impl$originalRespawnDestination), recreatedPlayer);
         SpongeCommon.post(event);
+
+        this.impl$originalRespawnDestination = null;
     }
 
     @Redirect(method = "sendLevelInfo", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;overworld()Lnet/minecraft/server/level/ServerLevel;"))
@@ -523,22 +592,8 @@ public abstract class PlayerListMixin implements PlayerListBridge {
     }
 
     @Inject(method = "saveAll()V", at = @At("RETURN"))
-    private void impl$saveOrInvalidateUserDuringSaveAll(final CallbackInfo ci) {
-        for (final SpongeUser user : SpongeUser.initializedUsers) {
-            if (SpongeUser.dirtyUsers.contains(user)) {
-                user.save();
-            } else {
-                user.invalidate();
-            }
-        }
-    }
-
-    @Inject(method = "remove", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/players/PlayerList;save(Lnet/minecraft/server/level/ServerPlayer;)V"))
-    private void impl$invalidateUserOnSave(final net.minecraft.server.level.ServerPlayer player, final CallbackInfo ci) {
-        // Just to be safe ignore dirty users that exist on online player
-        final User user = ((ServerPlayerBridge) player).bridge$getUser();
-        SpongeUser.dirtyUsers.remove(user);
-        ((SpongeUser) user).invalidate();
+    private void impl$saveDirtyUsersOnSaveAll(final CallbackInfo ci) {
+        ((SpongeServer) SpongeCommon.server()).userManager().saveDirtyUsers();
     }
 
 }

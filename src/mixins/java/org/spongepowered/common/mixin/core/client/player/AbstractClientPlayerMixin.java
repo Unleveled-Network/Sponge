@@ -41,33 +41,4 @@ public abstract class AbstractClientPlayerMixin extends PlayerMixin {
 
     }
 
-    @Override
-    public boolean bridge$isVanished() {
-        return false;
-    }
-
-    @Override
-    public void bridge$setVanished(boolean vanished) {
-
-    }
-
-    @Override
-    public boolean bridge$isVanishIgnoresCollision() {
-        return false;
-    }
-
-    @Override
-    public void bridge$setVanishIgnoresCollision(boolean uncollideable) {
-
-    }
-
-    @Override
-    public boolean bridge$isVanishPreventsTargeting() {
-        return false;
-    }
-
-    @Override
-    public void bridge$setVanishPreventsTargeting(boolean untargetable) {
-
-    }
 }

@@ -24,22 +24,21 @@
  */
 package org.spongepowered.common.accessor.world.entity;
 
+import net.minecraft.BlockUtil;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
 import org.spongepowered.common.UntransformedAccessorError;
 
-import java.util.List;
+import java.util.Optional;
 import java.util.Random;
-import net.minecraft.BlockUtil;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.network.syncher.EntityDataAccessor;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.portal.PortalInfo;
-import net.minecraft.world.phys.Vec3;
 
 @Mixin(Entity.class)
 public interface EntityAccessor {
@@ -55,7 +54,7 @@ public interface EntityAccessor {
     }
 
     @Accessor("DATA_CUSTOM_NAME")
-    static EntityDataAccessor<Component> accessor$DATA_CUSTOM_NAME() {
+    static EntityDataAccessor<Optional<Component>> accessor$DATA_CUSTOM_NAME() {
         throw new UntransformedAccessorError();
     }
 
@@ -90,11 +89,9 @@ public interface EntityAccessor {
 
     @Accessor("portalEntrancePos") void accessor$portalEntrancePos(final BlockPos portalEntrancePos);
 
-    @Accessor("passengers") List<Entity> accessor$passengers();
-
     @Invoker("setRot") void invoker$setRot(final float yRot, final float xRot);
 
-    @Invoker("getEncodeId") String invoker$getEncodeId();
+    @Invoker("getEncodeId") @Nullable String invoker$getEncodeId();
 
     @Invoker("removePassenger") void invoker$removePassenger(final Entity passenger);
 
@@ -107,7 +104,5 @@ public interface EntityAccessor {
     @Invoker("removeAfterChangingDimensions") void invoker$removeAfterChangingDimensions();
 
     @Invoker("getRelativePortalPosition") Vec3 invoker$getRelativePortalPosition(Direction.Axis axis, BlockUtil.FoundRectangle result);
-
-    @Invoker("findDimensionEntryPoint") PortalInfo invoker$findDimensionEntryPoint(ServerLevel targetWorld);
 
 }

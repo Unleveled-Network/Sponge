@@ -24,6 +24,10 @@
  */
 package org.spongepowered.common.mixin.core.server.level;
 
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -35,10 +39,6 @@ import org.spongepowered.common.bridge.data.VanishableBridge;
 import org.spongepowered.common.entity.living.human.HumanEntity;
 
 import java.util.stream.Stream;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.network.ServerGamePacketListenerImpl;
-import net.minecraft.world.entity.Entity;
 
 @Mixin(targets = "net/minecraft/server/level/ChunkMap$TrackedEntity")
 public abstract class ChunkMap_TrackedEntityMixin {
@@ -75,7 +75,7 @@ public abstract class ChunkMap_TrackedEntityMixin {
     @Inject(method = "broadcast(Lnet/minecraft/network/protocol/Packet;)V", at = @At("HEAD"), cancellable = true)
     private void impl$ignoreVanished(final Packet<?> p_219391_1_, final CallbackInfo ci) {
         if (this.entity instanceof VanishableBridge) {
-            if (((VanishableBridge) this.entity).bridge$isVanished()) {
+            if (((VanishableBridge) this.entity).bridge$vanishState().invisible()) {
                 ci.cancel();
             }
         }
@@ -87,7 +87,7 @@ public abstract class ChunkMap_TrackedEntityMixin {
                     target = "Lnet/minecraft/world/entity/Entity;broadcastToPlayer(Lnet/minecraft/server/level/ServerPlayer;)Z"))
     private boolean impl$isSpectatedOrVanished(final Entity entity, final ServerPlayer player) {
         if (entity instanceof VanishableBridge) {
-            if (((VanishableBridge) entity).bridge$isVanished()) {
+            if (((VanishableBridge) entity).bridge$vanishState().invisible()) {
                 return false;
             }
         }

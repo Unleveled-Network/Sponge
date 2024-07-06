@@ -26,6 +26,8 @@ package org.spongepowered.common.mixin.api.minecraft.server.level;
 
 import com.google.common.collect.ImmutableList;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import net.kyori.adventure.identity.Identity;
+import net.kyori.adventure.pointer.Pointers;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
@@ -45,19 +47,20 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.storage.ServerLevelData;
+import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
+import org.jetbrains.annotations.NotNull;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Server;
 import org.spongepowered.api.block.BlockSnapshot;
 import org.spongepowered.api.block.BlockType;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.fluid.FluidType;
-import org.spongepowered.api.registry.RegistryHolder;
-import org.spongepowered.api.registry.RegistryScope;
 import org.spongepowered.api.scheduler.ScheduledUpdateList;
 import org.spongepowered.api.util.Ticks;
 import org.spongepowered.api.world.BlockChangeFlag;
-import org.spongepowered.api.world.ChunkRegenerateFlag;
+import org.spongepowered.api.world.SerializationBehavior;
 import org.spongepowered.api.world.border.WorldBorder;
+import org.spongepowered.api.world.chunk.WorldChunk;
 import org.spongepowered.api.world.generation.ChunkGenerator;
 import org.spongepowered.api.world.server.ChunkManager;
 import org.spongepowered.api.world.server.ServerLocation;
@@ -72,17 +75,15 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.common.accessor.world.entity.raid.RaidsAccessor;
 import org.spongepowered.common.bridge.server.level.ServerLevelBridge;
 import org.spongepowered.common.bridge.world.level.border.WorldBorderBridge;
+import org.spongepowered.common.bridge.world.level.storage.PrimaryLevelDataBridge;
 import org.spongepowered.common.data.holder.SpongeLocationBaseDataHolder;
 import org.spongepowered.common.mixin.api.minecraft.world.level.LevelMixin_API;
-import org.spongepowered.common.util.MissingImplementationException;
 import org.spongepowered.common.util.VecHelper;
 import org.spongepowered.common.world.server.SpongeWorldTemplate;
 import org.spongepowered.common.world.storage.SpongeChunkLayout;
 import org.spongepowered.math.vector.Vector3d;
 import org.spongepowered.math.vector.Vector3i;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collection;
@@ -92,9 +93,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
 @SuppressWarnings({"unchecked", "rawtypes"})
 @Mixin(ServerLevel.class)
-public abstract class ServerLevelMixin_API extends LevelMixin_API<org.spongepowered.api.world.server.ServerWorld, ServerLocation> implements org.spongepowered.api.world.server.ServerWorld, SpongeLocationBaseDataHolder {
+public abstract class ServerLevelMixin_API extends LevelMixin_API<org.spongepowered.api.world.server.ServerWorld, ServerLocation> implements
+    org.spongepowered.api.world.server.ServerWorld, SpongeLocationBaseDataHolder {
 
     // @formatter:off
     @Shadow @Final private ServerTickList<Block> blockTicks;
@@ -114,6 +119,8 @@ public abstract class ServerLevelMixin_API extends LevelMixin_API<org.spongepowe
     @Shadow public abstract long shadow$getSeed();
     // @formatter:on
 
+    private volatile @MonotonicNonNull Pointers api$pointers;
+
     @Override
     public long seed() {
         return this.shadow$getSeed();
@@ -124,6 +131,20 @@ public abstract class ServerLevelMixin_API extends LevelMixin_API<org.spongepowe
     @Override
     public boolean isLoaded() {
         return ((ServerLevelBridge) this).bridge$isLoaded();
+    }
+
+    // Pointered (via Audience)
+
+    @Override
+    public @NotNull Pointers pointers() {
+        if (this.api$pointers == null) {
+            return this.api$pointers = Pointers.builder()
+                .withDynamic(Identity.UUID, this::uniqueId)
+                .withDynamic(Identity.NAME, () -> this.key().formatted())
+                .withDynamic(Identity.DISPLAY_NAME, () -> this.properties().displayName().orElse(null))
+                .build();
+        }
+        return this.api$pointers;
     }
 
     // LocationCreator
@@ -166,18 +187,13 @@ public abstract class ServerLevelMixin_API extends LevelMixin_API<org.spongepowe
     }
 
     @Override
-    public Optional<org.spongepowered.api.world.chunk.Chunk> regenerateChunk(final int cx, final int cy, final int cz, final ChunkRegenerateFlag flag) {
-        throw new MissingImplementationException("ServerWorld", "regenerateChunk");
-    }
-
-    @Override
     public BlockSnapshot createSnapshot(final int x, final int y, final int z) {
         return ((ServerLevelBridge) this).bridge$createSnapshot(x, y, z);
     }
 
     @Override
     public boolean restoreSnapshot(final BlockSnapshot snapshot, final boolean force, final BlockChangeFlag flag) {
-        return snapshot.restore(force, Objects.requireNonNull(flag, "flag"));
+        return Objects.requireNonNull(snapshot, "snapshot").withLocation(this.location(snapshot.position())).restore(force, Objects.requireNonNull(flag, "flag"));
     }
 
     @Override
@@ -192,13 +208,14 @@ public abstract class ServerLevelMixin_API extends LevelMixin_API<org.spongepowe
 
     @Override
     public boolean save() throws IOException {
+        final SerializationBehavior behavior = ((PrimaryLevelDataBridge) this.serverLevelData).bridge$serializationBehavior().orElse(SerializationBehavior.AUTOMATIC);
         ((ServerLevelBridge) this).bridge$setManualSave(true);
-        this.shadow$save(null, false, true);
-        return true;
+        this.shadow$save(null, false, false);
+        return !behavior.equals(SerializationBehavior.NONE);
     }
 
     @Override
-    public boolean unloadChunk(final org.spongepowered.api.world.chunk.Chunk chunk) {
+    public boolean unloadChunk(final WorldChunk chunk) {
         this.shadow$unload((LevelChunk) Objects.requireNonNull(chunk, "chunk"));
         return true;
     }
@@ -215,7 +232,7 @@ public abstract class ServerLevelMixin_API extends LevelMixin_API<org.spongepowe
 
     @Override
     public Collection<org.spongepowered.api.entity.Entity> entities() {
-        return (Collection< org.spongepowered.api.entity.Entity>) (Object) Collections.unmodifiableCollection(this.entitiesById.values());
+        return (Collection< org.spongepowered.api.entity.Entity>) (Object) ImmutableList.copyOf(this.entitiesById.values());
     }
 
     @Override
@@ -231,7 +248,7 @@ public abstract class ServerLevelMixin_API extends LevelMixin_API<org.spongepowe
     // Volume
 
     @Override
-    public boolean containsBlock(final int x, final int y, final int z) {
+    public boolean contains(final int x, final int y, final int z) {
         return Level.isInWorldBounds(new BlockPos(x, y, z));
     }
 
@@ -246,7 +263,9 @@ public abstract class ServerLevelMixin_API extends LevelMixin_API<org.spongepowe
 
     @Override
     public void removeBlockEntity(final int x, final int y, final int z) {
-        this.shadow$removeBlockEntity(new BlockPos(x, y, z));
+        // *Just* removing the block entity is going to give is a glitchy state that should never happen.
+        // So just remove the whole block.
+        this.blockEntity(x, y, z).ifPresent(ignored -> this.removeBlock(x, y, z));
     }
 
     // UpdateableVolume
@@ -283,16 +302,6 @@ public abstract class ServerLevelMixin_API extends LevelMixin_API<org.spongepowe
     @Override
     public void setWeather(final WeatherType type, final Ticks ticks) {
         ((ServerWorldProperties) this.shadow$getLevelData()).setWeather(Objects.requireNonNull(type, "type"), Objects.requireNonNull(ticks, "ticks"));
-    }
-
-    @Override
-    public RegistryScope registryScope() {
-        return RegistryScope.WORLD;
-    }
-
-    @Override
-    public RegistryHolder registries() {
-        return ((ServerLevelBridge) this).bridge$registries();
     }
 
     @Override

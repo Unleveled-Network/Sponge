@@ -25,16 +25,25 @@
 package org.spongepowered.common.util;
 
 import com.google.common.base.MoreObjects;
+import net.minecraft.world.damagesource.DamageSource;
 import org.spongepowered.api.block.BlockSnapshot;
 import org.spongepowered.api.world.server.ServerLocation;
 
 import java.util.Objects;
-import net.minecraft.world.damagesource.DamageSource;
 
 public final class MinecraftBlockDamageSource extends DamageSource {
 
     private final ServerLocation location;
     private final BlockSnapshot blockSnapshot;
+
+    public static DamageSource ofFire(final String damageTypeIn, final ServerLocation location, final boolean bypassesArmor) {
+        final MinecraftBlockDamageSource source = new MinecraftBlockDamageSource(damageTypeIn, location);
+        source.setIsFire();
+        if (bypassesArmor) {
+            source.bypassArmor();
+        }
+        return source;
+    }
 
     public MinecraftBlockDamageSource(final String damageTypeIn, final ServerLocation location) {
         super(damageTypeIn);

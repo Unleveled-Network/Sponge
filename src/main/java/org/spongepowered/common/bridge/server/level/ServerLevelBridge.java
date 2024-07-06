@@ -26,14 +26,9 @@ package org.spongepowered.common.bridge.server.level;
 
 import net.minecraft.server.bossevents.CustomBossEvents;
 import net.minecraft.server.level.progress.ChunkProgressListener;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import org.spongepowered.api.block.BlockSnapshot;
-import org.spongepowered.api.registry.RegistryHolder;
 import org.spongepowered.api.world.explosion.Explosion;
-
-import co.aikar.timings.sponge.WorldTimingsHandler;
-import org.spongepowered.math.vector.Vector3d;
 
 public interface ServerLevelBridge {
 
@@ -45,21 +40,11 @@ public interface ServerLevelBridge {
 
     CustomBossEvents bridge$getBossBarManager();
 
-    void bridge$updateRotation(Entity entityIn);
-
-    void bridge$addEntityRotationUpdate(Entity entity, Vector3d rotation);
-
-    WorldTimingsHandler bridge$getTimingsHandler();
-
-    long bridge$getChunkUnloadDelay();
-
-    void bridge$incrementChunkLoadCount();
-
     void bridge$triggerExplosion(Explosion explosion);
 
     void bridge$setManualSave(boolean state);
 
-    RegistryHolder bridge$registries();
-
     BlockSnapshot bridge$createSnapshot(int x, int y, int z);
+
+    long[] bridge$recentTickTimes();
 }

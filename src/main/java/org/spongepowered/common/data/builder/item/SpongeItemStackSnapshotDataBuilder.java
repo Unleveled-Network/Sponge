@@ -25,6 +25,7 @@
 package org.spongepowered.common.data.builder.item;
 
 import com.google.common.collect.ImmutableList;
+import net.minecraft.nbt.CompoundTag;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.data.DataManipulator;
@@ -37,14 +38,12 @@ import org.spongepowered.api.item.ItemTypes;
 import org.spongepowered.api.item.inventory.ItemStackSnapshot;
 import org.spongepowered.api.registry.RegistryTypes;
 import org.spongepowered.common.data.persistence.NBTTranslator;
-import org.spongepowered.common.item.SpongeItemStackBuilder;
+import org.spongepowered.common.item.SpongeItemStack;
 import org.spongepowered.common.item.SpongeItemStackSnapshot;
 import org.spongepowered.common.util.Constants;
 
 import java.util.List;
 import java.util.Optional;
-
-import net.minecraft.nbt.CompoundTag;
 
 public final class SpongeItemStackSnapshotDataBuilder extends AbstractDataBuilder<ItemStackSnapshot> implements DataBuilder<ItemStackSnapshot> {
 
@@ -55,7 +54,7 @@ public final class SpongeItemStackSnapshotDataBuilder extends AbstractDataBuilde
     @Override
     protected Optional<ItemStackSnapshot> buildContent(DataView container) throws InvalidDataException {
         if (container.contains(Constants.ItemStack.TYPE, Constants.ItemStack.COUNT)) {
-            final ItemType itemType = container.getRegistryValue(Constants.ItemStack.TYPE, RegistryTypes.ITEM_TYPE, Sponge.game().registries()).get();
+            final ItemType itemType = container.getRegistryValue(Constants.ItemStack.TYPE, RegistryTypes.ITEM_TYPE, Sponge.game()).get();
             if (itemType == ItemTypes.AIR.get()) {
                 return Optional.of(ItemStackSnapshot.empty());
             }
@@ -64,7 +63,7 @@ public final class SpongeItemStackSnapshotDataBuilder extends AbstractDataBuilde
             final @Nullable CompoundTag compound;
             if (container.contains(Constants.Sponge.UNSAFE_NBT)) {
                 compound = NBTTranslator.INSTANCE.translate(container.getView(Constants.Sponge.UNSAFE_NBT).get());
-                SpongeItemStackBuilder.fixEnchantmentData(itemType, compound);
+                SpongeItemStack.BuilderImpl.fixEnchantmentData(itemType, compound);
             } else {
                 compound = null;
             }

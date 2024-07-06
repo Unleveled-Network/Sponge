@@ -25,6 +25,9 @@
 package org.spongepowered.common.data.provider.entity;
 
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.data.DataTransactionResult;
 import org.spongepowered.api.data.Keys;
@@ -42,9 +45,6 @@ import org.spongepowered.common.util.SpongeTicks;
 import org.spongepowered.common.util.VecHelper;
 
 import java.util.stream.Collectors;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 
 public final class EntityData {
 
@@ -67,7 +67,13 @@ public final class EntityData {
                     .create(Keys.BASE_SIZE)
                         .get(h -> (double) h.getBbWidth())
                     .create(Keys.BASE_VEHICLE)
-                        .get(h -> (org.spongepowered.api.entity.Entity) h.getRootVehicle())
+                        .get(h -> {
+                            final Entity rootVehicle = h.getRootVehicle();
+                            if (rootVehicle == h) {
+                                return null;
+                            }
+                            return (org.spongepowered.api.entity.Entity) rootVehicle;
+                        })
                     .create(Keys.CUSTOM_NAME)
                         .get(h -> h.hasCustomName() ? SpongeAdventure.asAdventure(h.getCustomName()) : null)
                         .set((h, v) -> h.setCustomName(SpongeAdventure.asVanilla(v)))
@@ -163,8 +169,8 @@ public final class EntityData {
                     .create(Keys.PASSENGERS)
                         .get(h -> h.getPassengers().stream().map(org.spongepowered.api.entity.Entity.class::cast).collect(Collectors.toList()))
                         .set((h, v) -> {
-                            ((EntityAccessor) h).accessor$passengers().clear();
-                            v.forEach(v1 -> ((EntityAccessor) h).accessor$passengers().add((Entity) v1));
+                            h.ejectPassengers();
+                            v.forEach(v1 -> ((Entity) v1).startRiding(h, true));
                         })
                     .create(Keys.REMAINING_AIR)
                         .get(h -> Math.max(0, h.getAirSupply()))
@@ -194,10 +200,16 @@ public final class EntityData {
                         .set((h, v) -> h.startRiding((Entity) v, true))
                     .create(Keys.VELOCITY)
                         .get(h -> VecHelper.toVector3d(h.getDeltaMovement()))
-                        .set((h, v) -> h.setDeltaMovement(VecHelper.toVanillaVector3d(v)))
+                        .set((h, v) -> {
+                            h.setDeltaMovement(VecHelper.toVanillaVector3d(v));
+                            h.hurtMarked = true;
+                        })
                     .create(Keys.SWIFTNESS)
                         .get(m -> m.getDeltaMovement().length())
-                        .set((m, v) -> m.setDeltaMovement(m.getDeltaMovement().normalize().scale(v)))
+                        .set((m, v) -> {
+                            m.setDeltaMovement(m.getDeltaMovement().normalize().scale(v));
+                            m.hurtMarked = true;
+                        })
                         .supports(m -> m.getDeltaMovement().lengthSqr() > 0)
                 .asMutable(EntityMaxAirBridge.class)
                     .create(Keys.MAX_AIR)

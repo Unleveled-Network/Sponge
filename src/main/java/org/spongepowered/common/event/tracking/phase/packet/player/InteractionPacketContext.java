@@ -37,8 +37,6 @@ public class InteractionPacketContext extends PacketContext<InteractionPacketCon
 
     InteractionPacketContext(PacketState<InteractionPacketContext> state, PhaseTracker tracker) {
         super(state, tracker);
-        this.addCaptures();
-        this.addEntityDropCaptures();
     }
 
     @Override
@@ -55,12 +53,12 @@ public class InteractionPacketContext extends PacketContext<InteractionPacketCon
     BlockSnapshot getTargetBlock() {
         return this.targetBlock;
     }
-    
+
     InteractionPacketContext activeItem(ItemStack item) {
         this.activeItem = item;
         return this;
     }
-    
+
     ItemStack getActiveItem() {
         return this.activeItem;
     }

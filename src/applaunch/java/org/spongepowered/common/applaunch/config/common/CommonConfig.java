@@ -24,11 +24,11 @@
  */
 package org.spongepowered.common.applaunch.config.common;
 
+import org.spongepowered.common.applaunch.config.core.Config;
+import org.spongepowered.common.applaunch.config.core.IpSet;
 import org.spongepowered.configurate.NodePath;
 import org.spongepowered.configurate.objectmapping.meta.Comment;
 import org.spongepowered.configurate.objectmapping.meta.Setting;
-import org.spongepowered.common.applaunch.config.core.Config;
-import org.spongepowered.common.applaunch.config.core.IpSet;
 import org.spongepowered.configurate.transformation.ConfigurationTransformation;
 import org.spongepowered.configurate.transformation.TransformAction;
 
@@ -93,9 +93,6 @@ public final class CommonConfig implements Config {
 
     @Setting
     public final DebugCategory debug = new DebugCategory();
-
-    @Setting
-    public final TimingsCategory timings = new TimingsCategory();
 
     @Setting
     public final WorldCategory world = new WorldCategory();

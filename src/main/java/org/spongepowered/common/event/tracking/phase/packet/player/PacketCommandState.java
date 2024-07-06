@@ -27,9 +27,8 @@ package org.spongepowered.common.event.tracking.phase.packet.player;
 import com.google.common.collect.ImmutableList;
 import net.minecraft.world.entity.Entity;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.spongepowered.api.block.BlockSnapshot;
-import org.spongepowered.api.data.Transaction;
-import org.spongepowered.api.entity.living.player.User;
+import org.spongepowered.api.block.transaction.BlockTransactionReceipt;
+import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Cause;
 import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.event.EventContext;
@@ -41,7 +40,7 @@ import org.spongepowered.api.util.Tuple;
 import org.spongepowered.common.event.tracking.PhaseTracker;
 import org.spongepowered.common.event.tracking.TrackingUtil;
 import org.spongepowered.common.event.tracking.context.transaction.GameTransaction;
-import org.spongepowered.common.event.tracking.context.transaction.SpawnEntityTransaction;
+import org.spongepowered.common.event.tracking.context.transaction.world.SpawnEntityTransaction;
 import org.spongepowered.common.event.tracking.phase.packet.PacketState;
 import org.spongepowered.common.world.BlockChange;
 
@@ -60,9 +59,7 @@ public final class PacketCommandState extends PacketState<PlayerCommandPhaseCont
 
     @Override
     public PlayerCommandPhaseContext createNewContext(final PhaseTracker tracker) {
-        return new PlayerCommandPhaseContext(this, tracker)
-            .addCaptures()
-            .addEntityDropCaptures();
+        return new PlayerCommandPhaseContext(this, tracker);
     }
 
     @Override
@@ -71,15 +68,17 @@ public final class PacketCommandState extends PacketState<PlayerCommandPhaseCont
     }
 
     @Override
-    public void postBlockTransactionApplication(final BlockChange blockChange, final Transaction<? extends BlockSnapshot> transaction,
-        final PlayerCommandPhaseContext context) {
+    public void postBlockTransactionApplication(
+        final PlayerCommandPhaseContext context, final BlockChange blockChange,
+        final BlockTransactionReceipt transaction
+    ) {
         // We want to investigate if there is a user on the cause stack
         // and if possible, associate the notiifer/owner based on the change flag
         // We have to check if there is a player, because command blocks can be triggered
         // without player interaction.
         // Fixes https://github.com/SpongePowered/SpongeForge/issues/2442
-        PhaseTracker.getCauseStackManager().currentCause().first(User.class).ifPresent(user -> {
-            TrackingUtil.associateTrackerToTarget(blockChange, transaction, user);
+        PhaseTracker.getCauseStackManager().currentCause().first(Player.class).ifPresent(user -> {
+            TrackingUtil.associateTrackerToTarget(blockChange, transaction, user.uniqueId());
         });
    }
 

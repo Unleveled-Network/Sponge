@@ -1,3 +1,4 @@
+import org.spongepowered.gradle.vanilla.task.DecompileJarTask
 import java.util.Locale
 
 plugins {
@@ -5,9 +6,9 @@ plugins {
     `java-library`
     eclipse
     id("org.spongepowered.gradle.vanilla")
-    id("org.cadixdev.licenser")
     id("com.github.johnrengelman.shadow")
     id("org.spongepowered.gradle.sponge.dev") apply false // for version json generation
+    id("net.kyori.indra.licenser.spotless")
     id("implementation-structure")
     id("org.jetbrains.gradle.plugin.idea-ext")
     id("com.github.ben-manes.versions")
@@ -20,14 +21,14 @@ val recommendedVersion: String by project
 
 val apiAdventureVersion: String by project
 val apiConfigurateVersion: String by project
+val apiPluginSpiVersion: String by project
 val asmVersion: String by project
 val log4jVersion: String by project
 val modlauncherVersion: String by project
 val mixinVersion: String by project
-val pluginSpiVersion: String by project
 val guavaVersion: String by project
 val junitVersion: String by project
-val timingsVersion: String by project
+val mockitoVersion: String by project
 val checkerVersion: String by project
 
 val commonManifest = the<JavaPluginConvention>().manifest {
@@ -39,6 +40,9 @@ val commonManifest = the<JavaPluginConvention>().manifest {
         "Implementation-Version" to spongeImpl.generateImplementationVersionString(apiVersion, minecraftVersion, recommendedVersion),
         "Implementation-Vendor" to "SpongePowered"
     )
+    // These two are included by most CI's
+    System.getenv()["GIT_COMMIT"]?.apply { attributes("Git-Commit" to this) }
+    System.getenv()["GIT_BRANCH"]?.apply { attributes("Git-Branch" to this) }
 }
 
 tasks {
@@ -151,9 +155,6 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.20.0")
     implementation("javax.inject:javax.inject:1")
 
-    // Timings
-    implementation("org.spongepowered:timings:$timingsVersion")
-
     // ASM - required for generating event listeners
     implementation("org.ow2.asm:asm-util:$asmVersion")
     implementation("org.ow2.asm:asm-tree:$asmVersion")
@@ -164,7 +165,7 @@ dependencies {
 
     // Launch Dependencies - Needed to bootstrap the engine(s)
     launchConfig("org.spongepowered:spongeapi:$apiVersion")
-    launchConfig("org.spongepowered:plugin-spi:$pluginSpiVersion")
+    launchConfig("org.spongepowered:plugin-spi:$apiPluginSpiVersion")
     launchConfig("org.spongepowered:mixin:$mixinVersion")
     launchConfig("org.checkerframework:checker-qual:3.13.0")
     launchConfig("com.google.guava:guava:$guavaVersion") {
@@ -197,27 +198,38 @@ dependencies {
     applaunchConfig("org.apache.logging.log4j:log4j-core:$log4jVersion")
 
     mixinsConfig(sourceSets.named("main").map { it.output })
-    mixinsConfig("org.spongepowered:timings:$timingsVersion")
     add(mixins.get().implementationConfigurationName, "org.spongepowered:spongeapi:$apiVersion")
 
     // Tests
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:$junitVersion")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
+
+    testImplementation("org.mockito:mockito-core:$mockitoVersion")
+    testImplementation("org.mockito:mockito-junit-jupiter:$mockitoVersion")
+    testImplementation("org.mockito:mockito-inline:$mockitoVersion")
 }
 
 val organization: String by project
 val projectUrl: String by project
-license {
-    properties {
-        this["name"] = "Sponge"
-        this["organization"] = organization
-        this["url"] = projectUrl
-    }
-    header(rootProject.file("HEADER.txt"))
+indraSpotlessLicenser {
+    licenseHeaderFile(rootProject.file("HEADER.txt"))
 
-    include("**/*.java")
-    newLine(false)
+    property("name", "Sponge")
+    property("organization", organization)
+    property("url", projectUrl)
 }
+
+idea {
+    if (project != null) {
+        (project as ExtensionAware).extensions["settings"].run {
+            (this as ExtensionAware).extensions.getByType(org.jetbrains.gradle.ext.TaskTriggersConfig::class).run {
+                afterSync(":modlauncher-transformers:build")
+            }
+        }
+    }
+}
+
 
 allprojects {
     configurations.configureEach {
@@ -232,13 +244,14 @@ allprojects {
     apply(plugin = "org.jetbrains.gradle.plugin.idea-ext")
     apply(plugin = "java-library")
     apply(plugin = "maven-publish")
-    apply(plugin = "org.cadixdev.licenser")
+    apply(plugin = "net.kyori.indra.licenser.spotless")
 
     base {
         archivesBaseName = name.toLowerCase(Locale.ENGLISH)
     }
 
     plugins.withId("org.spongepowered.gradle.vanilla") {
+        val quiltflowerVersion: String by project
         minecraft {
             version(minecraftVersion)
             injectRepositories(false)
@@ -249,6 +262,14 @@ allprojects {
                     accessWideners(it)
                     parent?.minecraft?.accessWideners(it)
                 }
+        }
+
+        dependencies {
+            forgeFlower("org.quiltmc:quiltflower:$quiltflowerVersion")
+        }
+
+        tasks.named("decompile", DecompileJarTask::class) {
+            extraFernFlowerArgs.put("win", "0")
         }
     }
 
@@ -271,12 +292,37 @@ allprojects {
     java {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
+        if (!JavaVersion.current().isJava11Compatible) {
+            toolchain.languageVersion.set(JavaLanguageVersion.of(11))
+        }
     }
 
     tasks.withType<AbstractArchiveTask> {
         isPreserveFileTimestamps = false
         isReproducibleFileOrder = true
     }
+
+    spotless {
+        java {
+            toggleOffOn("@formatter:off", "@formatter:on")
+            endWithNewline()
+            indentWithSpaces(4)
+            trimTrailingWhitespace()
+            importOrderFile(rootProject.file("SpongeAPI/extra/eclipse/sponge_eclipse.importorder"))
+            targetExclude("build/generated/**/*") // exclude generated content
+        }
+        if (project.name != "generator") { // removeUnusedImports parses with the javac version used by Gradle, so generator can fail to parse
+            java {
+                removeUnusedImports()
+            }
+        }
+        kotlinGradle {
+            endWithNewline()
+            indentWithSpaces(4)
+            trimTrailingWhitespace()
+        }
+    }
+
     val spongeSnapshotRepo: String? by project
     val spongeReleaseRepo: String? by project
     tasks {
@@ -284,10 +330,10 @@ allprojects {
         withType(JavaCompile::class).configureEach {
             options.compilerArgs.addAll(listOf("-Xmaxerrs", "1000"))
             options.encoding = "UTF-8"
-            if (JavaVersion.current().isJava10Compatible) {
-                options.release.set(8)
+            options.release.set(8)
+            if (project.name != "testplugins" && System.getProperty("idea.sync.active") != null) {
+                options.annotationProcessorPath = emptyAnnotationProcessors // hack so IntelliJ doesn't try to run Mixin AP
             }
-            options.annotationProcessorPath = emptyAnnotationProcessors // hack so IntelliJ doesn't try to run Mixin AP
         }
 
         withType(PublishToMavenRepository::class).configureEach {

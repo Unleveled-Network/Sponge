@@ -67,7 +67,7 @@ import org.spongepowered.api.registry.RegistryTypes;
 import org.spongepowered.api.util.Color;
 import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.plugin.PluginContainer;
-import org.spongepowered.plugin.jvm.Plugin;
+import org.spongepowered.plugin.builtin.jvm.Plugin;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -75,6 +75,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Plugin("commandtest")
@@ -131,6 +132,20 @@ public final class CommandTest {
                         })
                         .build(),
                 "checkuser"
+        );
+
+
+        final Parameter.Value<String> choicesKey = Parameter.choices("bacon", "eggs", "spam", "spam spam spam").key("choices").build();
+        event.register(
+                this.plugin,
+                Command.builder()
+                        .addParameter(choicesKey)
+                        .executor(context -> {
+                            context.sendMessage(Identity.nil(), Component.text(context.requireOne(choicesKey)));
+                            return CommandResult.success();
+                        })
+                        .build(),
+                "testchoices"
         );
 
         final Parameter.Key<String> testKey = Parameter.key("testKey", String.class);
@@ -226,7 +241,7 @@ public final class CommandTest {
                         .addParameter(
                                 Parameter.registryElement(
                                         typeToken,
-                                        commandContext -> Sponge.game().registries(),
+                                        commandContext -> Sponge.game(),
                                         RegistryTypes.REGISTRY_KEYED_VALUE_PARAMETER,
                                         "sponge"
                                 ).key(commandParameterKey).build())
@@ -271,13 +286,15 @@ public final class CommandTest {
                 "testrk"
         );
 
-        final Parameter.Key<User> userKey = Parameter.key("user", User.class);
+        final Parameter.Key<UUID> userKey = Parameter.key("user", UUID.class);
         event.register(
                 this.plugin,
                 Command.builder()
                     .addParameter(Parameter.user().key(userKey).build())
                     .executor(context -> {
-                        context.sendMessage(Identity.nil(), Component.text(context.requireOne(userKey).name()));
+                        Sponge.server().userManager().load(context.requireOne(userKey))
+                                .thenAcceptAsync(x -> context.sendMessage(Identity.nil(), Component.text(x.map(User::name).orElse("unknown"))),
+                                    Sponge.server().scheduler().executor(this.plugin));
                         return CommandResult.success();
                     })
                     .build(),
@@ -342,6 +359,13 @@ public final class CommandTest {
                         .build(),
                     "testmessage"
                 );
+        event.register(this.plugin, Command.builder().addParameter(CommonParameters.BOOLEAN).executor(ctx -> {
+            if (ctx.requireOne(CommonParameters.BOOLEAN)) {
+                // custom error
+                return CommandResult.error(Component.text("custom error"));
+            }
+            return CommandResult.builder().error(null).build();
+        }).build(), "errormessage");
 
         final Command.Builder builder = Command.builder();
 
@@ -577,6 +601,28 @@ public final class CommandTest {
                         .build(),
                 "textcolor"
         );
+
+        final Parameter.Value<Integer> rangedInt1 = Parameter.rangedInteger(1, Integer.MAX_VALUE).key("quantity").build();
+
+        event.register(this.plugin,
+                Command.builder()
+                    .addParameter(Parameter.firstOf(playerKey, Parameter.user().key(userKey).build()))
+                    .addParameter(choicesKey)
+                    .addParameter(rangedInt1)
+                    .executor(ctx -> {
+                        if (ctx.hasAny(playerKey)) {
+                            ctx.sendMessage(Identity.nil(), Component.text(ctx.requireOne(playerKey).name()));
+                        } else {
+                            ctx.sendMessage(Identity.nil(), Component.text(ctx.requireOne(userKey).toString()));
+                        }
+                        ctx.sendMessage(Identity.nil(), Component.text(ctx.requireOne(choicesKey)));
+                        ctx.sendMessage(Identity.nil(), Component.text(ctx.requireOne(rangedInt1)));
+                        return CommandResult.success();
+                    })
+                    .build(), "firstoftest");
+
+        event.register(this.plugin,
+                Command.builder().executor(ctx -> CommandResult.error(Component.text("error"))).build(), "error");
     }
 
     @Listener

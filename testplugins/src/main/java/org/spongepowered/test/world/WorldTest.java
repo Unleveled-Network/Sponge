@@ -46,26 +46,27 @@ import org.spongepowered.api.registry.RegistryKey;
 import org.spongepowered.api.registry.RegistryReference;
 import org.spongepowered.api.registry.RegistryTypes;
 import org.spongepowered.api.util.Axis;
+import org.spongepowered.api.world.DefaultWorldKeys;
 import org.spongepowered.api.world.SerializationBehavior;
+import org.spongepowered.api.world.WorldType;
 import org.spongepowered.api.world.WorldTypes;
+import org.spongepowered.api.world.biome.Biome;
 import org.spongepowered.api.world.biome.provider.BiomeProvider;
 import org.spongepowered.api.world.biome.provider.CheckerboardBiomeConfig;
 import org.spongepowered.api.world.generation.ChunkGenerator;
-import org.spongepowered.api.world.generation.structure.Structure;
 import org.spongepowered.api.world.generation.config.NoiseGeneratorConfig;
 import org.spongepowered.api.world.generation.config.noise.NoiseConfig;
 import org.spongepowered.api.world.generation.config.structure.SeparatedStructureConfig;
 import org.spongepowered.api.world.generation.config.structure.StructureGenerationConfig;
+import org.spongepowered.api.world.generation.structure.Structure;
+import org.spongepowered.api.world.portal.PortalType;
 import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.api.world.server.ServerWorld;
 import org.spongepowered.api.world.server.WorldManager;
 import org.spongepowered.api.world.server.WorldTemplate;
-import org.spongepowered.api.world.WorldType;
-import org.spongepowered.api.world.biome.Biome;
-import org.spongepowered.api.world.portal.PortalType;
 import org.spongepowered.math.vector.Vector3d;
 import org.spongepowered.plugin.PluginContainer;
-import org.spongepowered.plugin.jvm.Plugin;
+import org.spongepowered.plugin.builtin.jvm.Plugin;
 
 import java.util.List;
 import java.util.Map;
@@ -330,7 +331,7 @@ public final class WorldTest {
         final String owner = player.name();
         final Random random = player.world().random();
 
-        final List<RegistryReference<Biome>> allBiomes = Sponge.server().registries().registry(RegistryTypes.BIOME)
+        final List<RegistryReference<Biome>> allBiomes = Sponge.server().registry(RegistryTypes.BIOME)
                 .streamEntries()
                 .map(RegistryEntry::asReference)
                 .collect(Collectors.toList());
@@ -376,7 +377,7 @@ public final class WorldTest {
                 .build();
 
         if (player.world().key().equals(worldKey)) {
-            player.setLocation(ServerLocation.of(wm.defaultWorld(), wm.defaultWorld().properties().spawnPosition()));
+            player.setLocation(ServerLocation.of(wm.world(DefaultWorldKeys.DEFAULT).get(), wm.world(DefaultWorldKeys.DEFAULT).get().properties().spawnPosition()));
         }
         context.sendMessage(Identity.nil(), Component.text("Generating your world..."));
         wm.deleteWorld(worldKey).thenCompose(b -> wm.loadWorld(customTemplate)).thenAccept(w -> this.transportToWorld(player, w)).exceptionally(e -> {

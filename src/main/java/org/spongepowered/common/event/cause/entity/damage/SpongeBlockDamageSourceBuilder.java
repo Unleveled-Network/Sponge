@@ -77,6 +77,9 @@ public final class SpongeBlockDamageSourceBuilder extends AbstractDamageSourceBu
         if (this.creative) {
             accessor.invoker$bypassInvul();
         }
+        if (this.fire) {
+            accessor.invoker$setIsFire();
+        }
         if (this.exhaustion != null) {
             accessor.accessor$exhaustion(this.exhaustion.floatValue());
         }

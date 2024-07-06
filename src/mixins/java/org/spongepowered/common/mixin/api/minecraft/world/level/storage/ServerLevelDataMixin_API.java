@@ -38,6 +38,7 @@ import org.spongepowered.api.world.weather.WeatherType;
 import org.spongepowered.api.world.weather.WeatherTypes;
 import org.spongepowered.asm.mixin.Implements;
 import org.spongepowered.asm.mixin.Interface;
+import org.spongepowered.asm.mixin.Interface.Remap;
 import org.spongepowered.asm.mixin.Intrinsic;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -51,7 +52,7 @@ import java.util.UUID;
 
 @SuppressWarnings("ConstantConditions")
 @Mixin(ServerLevelData.class)
-@Implements(@Interface(iface = ServerWorldProperties.class, prefix = "serverWorldProperties$"))
+@Implements(@Interface(iface = ServerWorldProperties.class, prefix = "serverWorldProperties$", remap = Remap.NONE))
 public interface ServerLevelDataMixin_API extends ServerWorldProperties {
 
     // @formatter:off
@@ -101,13 +102,13 @@ public interface ServerLevelDataMixin_API extends ServerWorldProperties {
     }
 
     @Override
-    default int wanderingTraderSpawnDelay() {
-        return this.shadow$getWanderingTraderSpawnDelay();
+    default Ticks wanderingTraderSpawnDelay() {
+        return Ticks.of(this.shadow$getWanderingTraderSpawnDelay());
     }
 
     @Override
-    default void setWanderingTraderSpawnDelay(final int delay) {
-        this.shadow$setWanderingTraderSpawnDelay(delay);
+    default void setWanderingTraderSpawnDelay(final Ticks delay) {
+        this.shadow$setWanderingTraderSpawnDelay((int) delay.ticks());
     }
 
     @Override
@@ -127,10 +128,11 @@ public interface ServerLevelDataMixin_API extends ServerWorldProperties {
 
     @Override
     default Weather weather() {
+        if (((ServerLevelData) this).isThundering()) {
+            return new SpongeWeather((SpongeWeatherType) WeatherTypes.THUNDER.get(), new SpongeTicks(this.shadow$getThunderTime()), new SpongeTicks(6000 - this.shadow$getThunderTime()));
+        }
         if (((ServerLevelData) this).isRaining()) {
             return new SpongeWeather((SpongeWeatherType) WeatherTypes.RAIN.get(), new SpongeTicks(this.shadow$getRainTime()), new SpongeTicks(6000 - this.shadow$getRainTime()));
-        } else if (((ServerLevelData) this).isThundering()) {
-            return new SpongeWeather((SpongeWeatherType) WeatherTypes.THUNDER.get(), new SpongeTicks(this.shadow$getThunderTime()), new SpongeTicks(6000 - this.shadow$getThunderTime()));
         }
         return new SpongeWeather((SpongeWeatherType) WeatherTypes.CLEAR.get(), new SpongeTicks(this.shadow$getClearWeatherTime()), new SpongeTicks(6000 - this.shadow$getClearWeatherTime()));
     }

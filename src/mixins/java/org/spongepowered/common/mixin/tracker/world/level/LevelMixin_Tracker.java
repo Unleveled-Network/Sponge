@@ -24,16 +24,6 @@
  */
 package org.spongepowered.common.mixin.tracker.world.level;
 
-import org.spongepowered.asm.mixin.Final;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.Slice;
-import org.spongepowered.common.bridge.TrackableBridge;
-import org.spongepowered.common.bridge.world.WorldBridge;
-
-import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
@@ -46,12 +36,23 @@ import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.storage.WritableLevelData;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Slice;
+import org.spongepowered.common.bridge.TrackableBridge;
+import org.spongepowered.common.bridge.world.level.LevelBridge;
+
 import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
 
+import javax.annotation.Nullable;
+
 @Mixin(Level.class)
-public abstract class LevelMixin_Tracker implements WorldBridge {
+public abstract class LevelMixin_Tracker implements LevelBridge {
 
     // @formatter:off
     @Shadow @Final public Random random;
@@ -89,7 +90,7 @@ public abstract class LevelMixin_Tracker implements WorldBridge {
     @Redirect(method = "tickBlockEntities",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/block/entity/TickableBlockEntity;tick()V"))
-    protected void tracker$wrapTileEntityTick(final TickableBlockEntity tileEntity) {
+    protected void tracker$wrapBlockEntityTick(final TickableBlockEntity tileEntity) {
         tileEntity.tick();
     }
 

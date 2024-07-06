@@ -46,7 +46,7 @@ import org.spongepowered.api.world.server.Ticket;
 import org.spongepowered.api.world.server.TicketTypes;
 import org.spongepowered.math.vector.Vector3i;
 import org.spongepowered.plugin.PluginContainer;
-import org.spongepowered.plugin.jvm.Plugin;
+import org.spongepowered.plugin.builtin.jvm.Plugin;
 import org.spongepowered.test.LoadableModule;
 
 import java.util.Optional;
@@ -138,7 +138,7 @@ public final class ChunkManagerTest implements LoadableModule {
 
         @Listener
         public void onChunkLoad(final ChunkEvent.Load event) {
-            this.logger.info("Chunk load: {}, {}", event.chunkWorld(), event.chunkPosition());
+            this.logger.info("Chunk load: {}, {}", event.worldKey(), event.chunkPosition());
         }
 
     }

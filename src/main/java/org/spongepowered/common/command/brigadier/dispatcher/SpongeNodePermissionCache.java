@@ -26,6 +26,7 @@ package org.spongepowered.common.command.brigadier.dispatcher;
 
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.RootCommandNode;
+import net.minecraft.commands.CommandSourceStack;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.common.SpongeCommon;
@@ -39,7 +40,6 @@ import java.util.WeakHashMap;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import net.minecraft.commands.CommandSourceStack;
 
 public final class SpongeNodePermissionCache {
 
@@ -97,8 +97,9 @@ public final class SpongeNodePermissionCache {
                 final String original = path.iterator().next();
                 pluginId = dispatcher.getCommandManager()
                         .commandMapping(original)
-                        .map(x -> x.plugin().metadata().id()).orElseGet(() -> {
-                            SpongeCommon.logger().error("Root command /{} does not have an associated plugin!", original);
+                        .flatMap(x -> x.plugin().map(y -> y.metadata().id())).orElseGet(() -> {
+                            SpongeCommon.logger().error("Root command /{} does not have an associated plugin! Using \"unknown\" in place of plugin "
+                                    + "ID for the permission.", original);
                             return "unknown";
                         });
                 permString = path.stream().map(x -> {

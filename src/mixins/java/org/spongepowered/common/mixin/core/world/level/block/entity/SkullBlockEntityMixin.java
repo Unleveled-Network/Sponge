@@ -25,6 +25,12 @@
 package org.spongepowered.common.mixin.core.world.level.block.entity;
 
 import com.mojang.authlib.GameProfile;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.StringUtil;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.entity.SkullBlockEntity;
+import net.minecraft.world.level.block.entity.TickableBlockEntity;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.profile.GameProfileManager;
@@ -37,16 +43,13 @@ import org.spongepowered.common.bridge.world.level.block.entity.SkullBlockEntity
 import org.spongepowered.common.profile.SpongeGameProfile;
 
 import java.util.concurrent.CompletableFuture;
-import net.minecraft.util.StringUtil;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.minecraft.world.level.block.entity.SkullBlockEntity;
-import net.minecraft.world.level.block.entity.TickableBlockEntity;
 
 @Mixin(SkullBlockEntity.class)
 public abstract class SkullBlockEntityMixin extends BlockEntity implements TickableBlockEntity, SkullBlockEntityBridge {
 
     @Shadow private GameProfile owner;
+
+    @Shadow public abstract void shadow$setOwner(@org.jetbrains.annotations.Nullable final GameProfile param0);
 
     private @Nullable CompletableFuture<?> impl$currentProfileFuture;
 
@@ -64,8 +67,8 @@ public abstract class SkullBlockEntityMixin extends BlockEntity implements Ticka
     @Override
     public void bridge$setUnresolvedPlayerProfile(final @Nullable GameProfile owner) {
         this.cancelResolveFuture();
-        this.owner = owner;
-        this.setChanged();
+        this.shadow$setOwner(owner);
+        this.impl$markDirtyAndUpdate();
     }
 
     /**
@@ -93,7 +96,7 @@ public abstract class SkullBlockEntityMixin extends BlockEntity implements Ticka
         }
         future.thenAcceptAsync(profile -> {
             this.owner = SpongeGameProfile.toMcProfile(profile);
-            this.setChanged();
+            this.impl$markDirtyAndUpdate();
         }, SpongeCommon.server());
         this.impl$currentProfileFuture = future;
         return input;
@@ -104,4 +107,12 @@ public abstract class SkullBlockEntityMixin extends BlockEntity implements Ticka
         super.setRemoved();
         this.cancelResolveFuture();
     }
+
+    private void impl$markDirtyAndUpdate() {
+        this.setChanged();
+        if (this.level != null && !this.level.isClientSide) {
+            ((ServerLevel) this.level).getChunkSource().blockChanged(this.getBlockPos());
+        }
+    }
+
 }

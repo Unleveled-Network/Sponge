@@ -25,6 +25,9 @@
 package org.spongepowered.common.data.provider.entity;
 
 import com.google.common.collect.ImmutableMap;
+import net.minecraft.core.Rotations;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.decoration.ArmorStand;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.data.Keys;
 import org.spongepowered.api.data.type.BodyPart;
@@ -42,9 +45,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import net.minecraft.core.Rotations;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.decoration.ArmorStand;
 
 public final class ArmorStandData {
 
@@ -85,12 +85,21 @@ public final class ArmorStandData {
                         .set((h, v) -> ((ArmorStandAccessor) h).invoker$setNoBasePlate(!v))
                     .create(Keys.HAS_MARKER)
                         .get(ArmorStand::isMarker)
-                        .set((h, v) -> ((ArmorStandAccessor) h).invoker$setMarker(v))
+                        .set((h, v) -> {
+                            ((ArmorStandAccessor) h).invoker$setMarker(v);
+                            h.noPhysics = !((ArmorStandAccessor) h).invoker$hasPhysics();
+                        })
                     .create(Keys.HEAD_ROTATION)
                         .get(h -> VecHelper.toVector3d(h.getHeadPose()))
                         .set((h, v) -> h.setHeadPose(VecHelper.toRotation(v)))
+                    .create(Keys.IS_GRAVITY_AFFECTED)
+                        .get(h -> !h.isNoGravity())
+                        .set((h, v) -> {
+                            h.setNoGravity(!v);
+                            h.noPhysics = !((ArmorStandAccessor) h).invoker$hasPhysics();
+                        })
                     .create(Keys.IS_PLACING_DISABLED)
-                        .get(h -> Sponge.game().registries().registry(RegistryTypes.EQUIPMENT_TYPE)
+                        .get(h -> Sponge.game().registry(RegistryTypes.EQUIPMENT_TYPE)
                                 .streamEntries()
                                 .map(RegistryEntry::value)
                                 .collect(Collectors.toMap(k -> k, v -> ((ArmorStandAccessor) h).invoker$isDisabled((EquipmentSlot) (Object) v)))
@@ -158,16 +167,16 @@ public final class ArmorStandData {
                             ((ArmorStandAccessor) h).accessor$disabledSlots(disabledSlots);
                         })
                     .create(Keys.LEFT_ARM_ROTATION)
-                        .get(h -> VecHelper.toVector3d(h.getLeftArmPose()))
+                        .get(h -> VecHelper.toVector3d(((ArmorStandAccessor) h).accessor$leftArmPose()))
                         .set((h, v) -> h.setLeftArmPose(VecHelper.toRotation(v)))
                     .create(Keys.LEFT_LEG_ROTATION)
-                        .get(h -> VecHelper.toVector3d(h.getLeftLegPose()))
+                        .get(h -> VecHelper.toVector3d(((ArmorStandAccessor) h).accessor$leftLegPose()))
                         .set((h, v) -> h.setLeftLegPose(VecHelper.toRotation(v)))
                     .create(Keys.RIGHT_ARM_ROTATION)
-                        .get(h -> VecHelper.toVector3d(h.getRightArmPose()))
+                        .get(h -> VecHelper.toVector3d(((ArmorStandAccessor) h).accessor$rightArmPose()))
                         .set((h, v) -> h.setRightArmPose(VecHelper.toRotation(v)))
                     .create(Keys.RIGHT_LEG_ROTATION)
-                        .get(h -> VecHelper.toVector3d(h.getRightLegPose()))
+                        .get(h -> VecHelper.toVector3d(((ArmorStandAccessor) h).accessor$rightLegPose()))
                         .set((h, v) -> h.setRightLegPose(VecHelper.toRotation(v)));
     }
     // @formatter:on

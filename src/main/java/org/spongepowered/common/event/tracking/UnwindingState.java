@@ -24,14 +24,18 @@
  */
 package org.spongepowered.common.event.tracking;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.Block;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.spongepowered.api.ResourceKey;
 import org.spongepowered.common.entity.PlayerTracker;
 import org.spongepowered.common.event.tracking.phase.general.ExplosionContext;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.Block;
+import java.util.Optional;
+import java.util.function.Supplier;
 
 public final class UnwindingState implements IPhaseState<UnwindingPhaseContext> {
 
@@ -55,37 +59,6 @@ public final class UnwindingState implements IPhaseState<UnwindingPhaseContext> 
         return false;
     }
 
-    @Override
-    public boolean ignoresBlockUpdateTick(final UnwindingPhaseContext context) {
-        return true;
-    }
-
-    @Override
-    public boolean ignoresScheduledUpdates() {
-        return false;
-    }
-
-    @Override
-    public boolean alreadyCapturingEntitySpawns() {
-        return true;
-    }
-
-    @Override
-    public boolean alreadyCapturingEntityTicks() {
-        return true;
-    }
-
-    @Override
-    public boolean alreadyCapturingTileTicks() {
-        return true;
-    }
-
-    @Override
-    public boolean allowsGettingQueuedRemovedTiles() {
-        return true;
-    }
-
-
 
     @SuppressWarnings("unchecked")
     @Override
@@ -107,21 +80,18 @@ public final class UnwindingState implements IPhaseState<UnwindingPhaseContext> 
         final PhaseContext<@NonNull ?> unwindingContext = context.getUnwindingContext();
         try {
             // TODO - figure out what goes here.
-//            TrackingUtil.processBlockCaptures(unwindingContext);
+            if (!unwindingContext.getTransactor().isEmpty()) {
+                PhasePrinter.printUnprocessedPhaseContextObjects(context.createdTracker.stack, this, context);
+            }
         } catch (final Exception e) {
             PhasePrinter.printExceptionFromPhase(PhaseTracker.getInstance().stack, e, context);
         }
     }
 
-    /**
-     * We want to allow the post state to do it's own thing and avoid entering extra states for block
-     * ticking from unwinds.
-     * @param context
-     * @return
-     */
     @Override
-    public boolean alreadyCapturingBlockTicks(final UnwindingPhaseContext context) {
-        return true;
+    public Supplier<ResourceKey> attemptWorldKey(UnwindingPhaseContext context) {
+        final Optional<Supplier<ResourceKey>> o = context.getSource(Entity.class).map(s -> () -> (ResourceKey) (Object) s.level.dimension().location());
+        return o.orElseThrow(() -> new IllegalStateException("Expected to be ticking an entity!"));
     }
 
     private final String desc = TrackingUtil.phaseStateToString("General", this);

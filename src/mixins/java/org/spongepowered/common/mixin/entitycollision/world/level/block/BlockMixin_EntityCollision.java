@@ -30,14 +30,14 @@ import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockType;
 import org.spongepowered.api.registry.RegistryTypes;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.common.applaunch.config.core.ConfigHandle;
-import org.spongepowered.common.bridge.world.level.storage.PrimaryLevelDataBridge;
-import org.spongepowered.common.config.inheritable.InheritableConfigHandle;
-import org.spongepowered.common.applaunch.config.core.SpongeConfigs;
 import org.spongepowered.common.applaunch.config.common.CommonConfig;
-import org.spongepowered.common.config.inheritable.EntityCollisionCategory;
-import org.spongepowered.common.config.inheritable.WorldConfig;
+import org.spongepowered.common.applaunch.config.core.ConfigHandle;
+import org.spongepowered.common.applaunch.config.core.SpongeConfigs;
 import org.spongepowered.common.bridge.entitycollision.CollisionCapabilityBridge;
+import org.spongepowered.common.bridge.world.level.storage.PrimaryLevelDataBridge;
+import org.spongepowered.common.config.inheritable.EntityCollisionCategory;
+import org.spongepowered.common.config.inheritable.InheritableConfigHandle;
+import org.spongepowered.common.config.inheritable.WorldConfig;
 
 @Mixin(Block.class)
 public abstract class BlockMixin_EntityCollision implements CollisionCapabilityBridge {
@@ -47,7 +47,7 @@ public abstract class BlockMixin_EntityCollision implements CollisionCapabilityB
 
     @Override
     public ResourceKey collision$getKey() {
-        return Sponge.game().registries().registry(RegistryTypes.BLOCK_TYPE).valueKey((BlockType) this);
+        return Sponge.game().registry(RegistryTypes.BLOCK_TYPE).valueKey((BlockType) this);
     }
 
     @Override
@@ -79,9 +79,7 @@ public abstract class BlockMixin_EntityCollision implements CollisionCapabilityB
         this.collision$setMaxCollisions(worldCollCat.maxEntitiesWithinAABB);
 
         boolean requiresSave = false;
-        Sponge.game().registries().registry(RegistryTypes.BLOCK_TYPE).valueKey((BlockType) this);
-
-        String[] ids = Sponge.game().registries().registry(RegistryTypes.BLOCK_TYPE).valueKey((BlockType) this).toString().split(":");
+        String[] ids = Sponge.game().registry(RegistryTypes.BLOCK_TYPE).valueKey((BlockType) this).toString().split(":");
         String modId = ids[0];
         String name = ids[1];
 

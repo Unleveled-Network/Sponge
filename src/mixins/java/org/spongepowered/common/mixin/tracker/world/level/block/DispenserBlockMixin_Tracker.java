@@ -25,6 +25,13 @@
 package org.spongepowered.common.mixin.tracker.world.level.block;
 
 import com.google.common.collect.ImmutableList;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.BlockSourceImpl;
+import net.minecraft.core.dispenser.DispenseItemBehavior;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.DispenserBlock;
+import net.minecraft.world.level.block.entity.DispenserBlockEntity;
 import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.event.SpongeEventFactory;
 import org.spongepowered.api.event.item.inventory.DropItemEvent;
@@ -48,17 +55,11 @@ import org.spongepowered.common.item.util.ItemStackUtil;
 
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.BlockSourceImpl;
-import net.minecraft.core.dispenser.DispenseItemBehavior;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.DispenserBlock;
-import net.minecraft.world.level.block.entity.DispenserBlockEntity;
+import java.util.function.Supplier;
 
 @Mixin(DispenserBlock.class)
-public class DispenserBlockMixin_Tracker {
-    private ItemStack tracker$originalItem = ItemStack.EMPTY;
+public abstract class DispenserBlockMixin_Tracker {
+    private Supplier<ItemStack> tracker$originalItem = () -> ItemStack.EMPTY;
     private PhaseContext<?> tracker$context = PhaseContext.empty();
 
     @Inject(method = "dispenseFrom", at = @At(value = "HEAD"))
@@ -68,8 +69,8 @@ public class DispenserBlockMixin_Tracker {
         final LevelChunkBridge mixinChunk = (LevelChunkBridge) worldIn.getChunkAt(pos);
         this.tracker$context = BlockPhase.State.DISPENSE.createPhaseContext(PhaseTracker.SERVER)
                 .source(spongeBlockSnapshot)
-                .creator(() -> mixinChunk.bridge$getBlockCreator(pos))
-                .notifier(() -> mixinChunk.bridge$getBlockNotifier(pos))
+                .creator(() -> mixinChunk.bridge$getBlockCreatorUUID(pos))
+                .notifier(() -> mixinChunk.bridge$getBlockNotifierUUID(pos))
                 .buildAndSwitch();
     }
 
@@ -93,7 +94,8 @@ public class DispenserBlockMixin_Tracker {
             locals = LocalCapture.CAPTURE_FAILSOFT
     )
     private void tracker$storeOriginalItem(final ServerLevel worldIn, final BlockPos pos, final CallbackInfo ci, final BlockSourceImpl source, final DispenserBlockEntity dispenser, final int slotIndex, final ItemStack dispensedItem, final DispenseItemBehavior behavior) {
-        this.tracker$originalItem = ItemStackUtil.cloneDefensiveNative(dispensedItem);
+        final ItemStack tracker$originalItem = ItemStackUtil.cloneDefensiveNative(dispensedItem);
+        this.tracker$originalItem = () -> tracker$originalItem;
     }
 
 
@@ -101,13 +103,6 @@ public class DispenserBlockMixin_Tracker {
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/world/level/block/entity/DispenserBlockEntity;setItem(ILnet/minecraft/world/item/ItemStack;)V"))
     private void tracker$setInventoryContentsCallEvent(final DispenserBlockEntity dispenserTileEntity, final int index, final ItemStack stack) {
-        final PhaseContext<?> context = PhaseTracker.getInstance().getPhaseContext();
-        // If we captured nothing, simply set the slot contents and return
-        // TODO - figure out how to get captured item transactions
-//        if (context.getCapturedItemsOrEmptyList().isEmpty()) {
-//            dispenserTileEntity.setInventorySlotContents(index, stack);
-//            return;
-//        }
         final ItemStack dispensedItem = ItemStack.EMPTY;
         final ItemStackSnapshot snapshot = ItemStackUtil.snapshotOf(dispensedItem);
         final List<ItemStackSnapshot> original = new ArrayList<>();
@@ -117,13 +112,13 @@ public class DispenserBlockMixin_Tracker {
             final DropItemEvent.Pre dropEvent = SpongeEventFactory.createDropItemEventPre(frame.currentCause(), ImmutableList.of(snapshot), original);
             SpongeCommon.post(dropEvent);
             if (dropEvent.isCancelled()) {
-                dispenserTileEntity.setItem(index, this.tracker$originalItem);
+                dispenserTileEntity.setItem(index, this.tracker$originalItem.get());
                 return;
             }
 
             dispenserTileEntity.setItem(index, stack);
         } finally {
-            this.tracker$originalItem = ItemStack.EMPTY;
+            this.tracker$originalItem = () -> ItemStack.EMPTY;
         }
     }
 }

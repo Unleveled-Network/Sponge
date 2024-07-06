@@ -34,7 +34,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.api.item.inventory.ItemStackSnapshot;
 import org.spongepowered.api.world.BlockChangeFlags;
 import org.spongepowered.common.block.SpongeBlockSnapshot;
-import org.spongepowered.common.block.SpongeBlockSnapshotBuilder;
 import org.spongepowered.common.event.tracking.IPhaseState;
 import org.spongepowered.common.event.tracking.PhaseContext;
 import org.spongepowered.common.event.tracking.PhaseTracker;
@@ -56,7 +55,6 @@ public class GrowablePhaseContext extends PhaseContext<GrowablePhaseContext> {
 
     public GrowablePhaseContext provideItem(final ItemStack stack) {
         this.usedItem = ItemStackUtil.snapshotOf(stack);
-        this.priorContext = PhaseTracker.getInstance().getPhaseContext();
         return this;
     }
 
@@ -79,16 +77,19 @@ public class GrowablePhaseContext extends PhaseContext<GrowablePhaseContext> {
     public GrowablePhaseContext buildAndSwitch() {
         checkState(this.pos != null, "BlockPos is null");
         checkState(this.blockState != null, "BlockState is null");
-        checkState(this.usedItem != null, "ItemUsed is null");
-        checkState(this.priorContext != null, "Prior context is null");
+        if (this.usedItem == null) {
+            this.usedItem = ItemStackSnapshot.empty(); // No used item when growing naturally
+        }
         checkState(this.world != null, "World is null");
-        final SpongeBlockSnapshotBuilder builder = SpongeBlockSnapshotBuilder.pooled()
+        this.priorContext = this.createdTracker.getPhaseContext();
+        checkState(this.priorContext != null, "Prior context is null");
+        final SpongeBlockSnapshot.BuilderImpl builder = SpongeBlockSnapshot.BuilderImpl.pooled()
             .world(((ServerLevel) this.world))
             .position(VecHelper.toVector3i(this.pos))
             .blockState(this.blockState)
             .flag(BlockChangeFlags.NONE.withPhysics(true).withUpdateNeighbors(true).withNotifyObservers(true));
-        this.priorContext.applyOwnerIfAvailable((owner) -> builder.creator(owner.uniqueId()));
-        this.priorContext.applyNotifierIfAvailable((notifier) -> builder.notifier(notifier.uniqueId()));
+        this.priorContext.applyOwnerIfAvailable(builder::creator);
+        this.priorContext.applyNotifierIfAvailable(builder::notifier);
         this.snapshot = builder.build();
         return super.buildAndSwitch();
     }

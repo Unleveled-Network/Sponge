@@ -25,6 +25,7 @@
 package org.spongepowered.common.world.biome.provider;
 
 import com.google.common.collect.Lists;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.spongepowered.api.registry.RegistryReference;
 import org.spongepowered.api.world.biome.AttributedBiome;
@@ -35,13 +36,13 @@ import org.spongepowered.api.world.biome.provider.MultiNoiseBiomeConfig;
 import org.spongepowered.api.world.biome.provider.multinoise.MultiNoiseConfig;
 import org.spongepowered.common.accessor.world.level.biome.MultiNoiseBiomeSourceAccessor;
 import org.spongepowered.common.server.BootstrapProperties;
+import org.spongepowered.common.util.SeedUtil;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 
 public final class SpongeMultiNoiseBiomeConfig extends AbstractBiomeProviderConfig implements MultiNoiseBiomeConfig {
 
@@ -88,7 +89,7 @@ public final class SpongeMultiNoiseBiomeConfig extends AbstractBiomeProviderConf
     public MultiNoiseConfig weirdnessConfig() {
         return this.weirdnessConfig;
     }
-    
+
     public static final class BuilderImpl implements Builder {
 
         public long seed;
@@ -98,6 +99,12 @@ public final class SpongeMultiNoiseBiomeConfig extends AbstractBiomeProviderConf
         @Override
         public Builder seed(final long seed) {
             this.seed = seed;
+            return this;
+        }
+
+        @Override
+        public Builder seed(final String seed) {
+            this.seed = SeedUtil.compute(seed);
             return this;
         }
 
@@ -166,7 +173,7 @@ public final class SpongeMultiNoiseBiomeConfig extends AbstractBiomeProviderConf
         @Override
         public Builder reset() {
             this.biomes.clear();
-            this.seed = BootstrapProperties.dimensionGeneratorSettings.seed();
+            this.seed = BootstrapProperties.worldGenSettings.seed();
             final MultiNoiseBiomeSource.NoiseParameters defaultNoise = MultiNoiseBiomeSourceAccessor.accessor$DEFAULT_NOISE_PARAMETERS();
             this.temperatureConfig = (MultiNoiseConfig) defaultNoise;
             this.humidityConfig = (MultiNoiseConfig) defaultNoise;

@@ -27,6 +27,18 @@ package org.spongepowered.common.data.provider.item.stack;
 import com.google.common.collect.ImmutableSet;
 import com.mojang.datafixers.util.Pair;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.minecraft.core.Registry;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.PickaxeItem;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.block.BlockType;
 import org.spongepowered.api.data.Keys;
 import org.spongepowered.api.effect.potion.PotionEffect;
@@ -43,18 +55,6 @@ import org.spongepowered.common.util.NBTCollectors;
 
 import java.util.List;
 import java.util.Set;
-import net.minecraft.core.Registry;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.StringTag;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.food.FoodProperties;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.PickaxeItem;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 
 @SuppressWarnings({"unchecked", "UnstableApiUsage"})
 public final class ItemStackData {
@@ -119,10 +119,7 @@ public final class ItemStackData {
                             tag.putInt(Constants.Item.CUSTOM_MODEL_DATA, v);
                         })
                         .delete(h -> {
-                            final CompoundTag tag = h.getTag();
-                            if (tag != null) {
-                                tag.remove(Constants.Item.CUSTOM_MODEL_DATA);
-                            }
+                            h.removeTagKey(Constants.Item.CUSTOM_MODEL_DATA);
                         })
                     .create(Keys.CUSTOM_NAME)
                         .get(h -> {
@@ -155,11 +152,11 @@ public final class ItemStackData {
                     .create(Keys.LORE)
                         .get(h -> {
                             final CompoundTag tag = h.getTag();
-                            if (tag == null || tag.contains(Constants.Item.ITEM_DISPLAY)) {
+                            if (tag == null || !tag.contains(Constants.Item.ITEM_DISPLAY)) {
                                 return null;
                             }
-
-                            final ListTag list = tag.getList(Constants.Item.ITEM_LORE, Constants.NBT.TAG_STRING);
+                            final CompoundTag displayCompound = tag.getCompound(Constants.Item.ITEM_DISPLAY);
+                            final ListTag list = displayCompound.getList(Constants.Item.ITEM_LORE, Constants.NBT.TAG_STRING);
                             return list.isEmpty() ? null : SpongeAdventure.json(list.stream().collect(NBTCollectors.toStringList()));
                         })
                         .set((h, v) -> {
@@ -208,18 +205,21 @@ public final class ItemStackData {
         if (value == null || (!value && !stack.hasTag())) {
             return;
         }
-        final CompoundTag tag = stack.getOrCreateTag();
         if (value) {
+            final CompoundTag tag = stack.getOrCreateTag();
             tag.putBoolean(Constants.Item.ITEM_UNBREAKABLE, true);
         } else {
-            tag.remove(Constants.Item.ITEM_UNBREAKABLE);
+            stack.removeTagKey(Constants.Item.ITEM_UNBREAKABLE);
         }
     }
 
     private static void deleteLore(final ItemStack stack) {
-        final CompoundTag tag = stack.getTag();
-        if (tag != null && tag.contains(Constants.Item.ITEM_DISPLAY)) {
-            tag.getCompound(Constants.Item.ITEM_DISPLAY).remove(Constants.Item.ITEM_LORE);
+        final @Nullable CompoundTag tag = stack.getTagElement(Constants.Item.ITEM_DISPLAY);
+        if (tag != null) {
+            tag.remove(Constants.Item.ITEM_LORE);
+            if (tag.isEmpty()) {
+                stack.removeTagKey(Constants.Item.ITEM_DISPLAY);
+            }
         }
     }
 }

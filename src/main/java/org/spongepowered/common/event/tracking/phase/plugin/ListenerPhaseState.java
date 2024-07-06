@@ -24,15 +24,12 @@
  */
 package org.spongepowered.common.event.tracking.phase.plugin;
 
-import org.checkerframework.checker.nullness.qual.Nullable;
-import org.spongepowered.api.entity.living.player.server.ServerPlayer;
-import org.spongepowered.api.item.inventory.ItemStack;
-import org.spongepowered.common.bridge.world.level.chunk.LevelChunkBridge;
-import org.spongepowered.common.entity.PlayerTracker;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.spongepowered.common.bridge.world.level.chunk.LevelChunkBridge;
+import org.spongepowered.common.entity.PlayerTracker;
 
 /**
  * A specialized phase for forge event listeners during pre tick, may need to do the same
@@ -46,28 +43,16 @@ abstract class ListenerPhaseState<L extends ListenerPhaseContext<L>> extends Plu
     }
 
     @Override
-    public boolean isNotReEntrant() {
-        return false;
-    }
-
-    @Override
-    public boolean isEvent() {
-        return true;
-    }
-
-    @Override
-    public void associateNeighborStateNotifier(final L unwindingContext, final @Nullable BlockPos sourcePos, final Block block, final BlockPos notifyPos,
-        final ServerLevel minecraftWorld, final PlayerTracker.Type notifier) {
+    public void associateNeighborStateNotifier(final L unwindingContext, final @Nullable BlockPos sourcePos, final Block block,
+            final BlockPos notifyPos, final ServerLevel level, final PlayerTracker.Type notifier) {
         unwindingContext.getCapturedPlayer().ifPresent(player ->
-            ((LevelChunkBridge) minecraftWorld.getChunkAt(notifyPos))
-                .bridge$addTrackedBlockPosition(block, notifyPos, ((ServerPlayer) player).user(), PlayerTracker.Type.NOTIFIER)
+            ((LevelChunkBridge) level.getChunkAt(notifyPos)).bridge$addTrackedBlockPosition(block, notifyPos, player.uniqueId(),
+                    PlayerTracker.Type.NOTIFIER)
         );
     }
 
     @Override
-    public void capturePlayerUsingStackToBreakBlock(final @Nullable ItemStack stack, final net.minecraft.server.level.ServerPlayer playerMP, final L context) {
-        context.getCapturedPlayerSupplier().addPlayer(playerMP);
+    public void capturePlayerUsingStackToBreakBlock(final net.minecraft.server.level.ServerPlayer player, final L context) {
+        context.getCapturedPlayerSupplier().addPlayer(player);
     }
-
-
 }

@@ -24,6 +24,8 @@
  */
 package org.spongepowered.common.bridge;
 
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.common.applaunch.config.common.ModuleCategory;
@@ -32,8 +34,6 @@ import org.spongepowered.common.event.tracking.PhaseTracker;
 
 import java.util.Optional;
 import java.util.UUID;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
 /**
  * An optionally implemented interface to bridge getting the
@@ -43,26 +43,16 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * {@code ChunkMixin_OwnershipTracked}, and {@code WorldMixin_CreatorTracked}.
  * Note that it is not guaranteed this interface is mixed onto
  * {@link Entity} and {@link BlockEntity} because of the option
- * for {@link ModuleCategory#useTracking()}. If the tracking is
+ * for {@link ModuleCategory#tracking}. If the tracking is
  * disabled, the {@link PhaseTracker} and it's hooks are still
  * used, but none of the owner/notifier information is persisted
  * or transferred to the target objects.
  */
 public interface CreatorTrackedBridge {
 
-    Optional<UUID> tracked$getCreatorUUID();
+    Optional<UUID> tracker$getCreatorUUID();
 
-    Optional<UUID> tracked$getNotifierUUID();
+    Optional<UUID> tracker$getNotifierUUID();
 
-    Optional<User> tracked$getTrackedUser(PlayerTracker.Type type);
-
-    Optional<User> tracked$getCreatorReference();
-
-    void tracked$setCreatorReference(@Nullable User user);
-
-    Optional<User> tracked$getNotifierReference();
-
-    void tracked$setNotifier(@Nullable User user);
-
-    void tracked$setTrackedUUID(PlayerTracker.Type type, @Nullable UUID uuid);
+    void tracker$setTrackedUUID(PlayerTracker.Type type, @Nullable UUID uuid);
 }

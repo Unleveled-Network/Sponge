@@ -30,9 +30,7 @@ import org.spongepowered.api.Sponge;
 import org.spongepowered.api.data.Keys;
 import org.spongepowered.api.entity.Item;
 import org.spongepowered.api.event.Cause;
-import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.event.SpongeEventFactory;
-import org.spongepowered.api.event.entity.ExpireEntityEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -41,10 +39,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.Slice;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.common.SpongeCommon;
 import org.spongepowered.common.bridge.data.SpongeDataHolderBridge;
 import org.spongepowered.common.bridge.world.entity.item.ItemEntityBridge;
-import org.spongepowered.common.bridge.world.WorldBridge;
+import org.spongepowered.common.bridge.world.level.LevelBridge;
 import org.spongepowered.common.bridge.world.level.storage.PrimaryLevelDataBridge;
 import org.spongepowered.common.config.SpongeGameConfigs;
 import org.spongepowered.common.data.provider.entity.ItemData;
@@ -82,7 +79,7 @@ public abstract class ItemEntityMixin extends EntityMixin implements ItemEntityB
 
     @ModifyConstant(method = "mergeWithNeighbours", constant = @Constant(doubleValue = Constants.Entity.Item.DEFAULT_ITEM_MERGE_RADIUS))
     private double impl$changeSearchRadiusFromConfig(final double originalRadius) {
-        if (this.level.isClientSide || ((WorldBridge) this.level).bridge$isFake()) {
+        if (this.level.isClientSide || ((LevelBridge) this.level).bridge$isFake()) {
             return originalRadius;
         }
         if (this.impl$cachedRadius == -1) {
@@ -118,12 +115,12 @@ public abstract class ItemEntityMixin extends EntityMixin implements ItemEntityB
     }
 
     @Override
-    public void bridge$setPrevPickupDelay(int delay) {
+    public void bridge$setPrevPickupDelay(final int delay) {
         this.impl$previousPickupDelay = delay;
     }
 
     @Override
-    public void bridge$setPrevDespawnDelay(int delay) {
+    public void bridge$setPrevDespawnDelay(final int delay) {
         this.impl$previousDespawnDelay = delay;
     }
 
@@ -171,20 +168,11 @@ public abstract class ItemEntityMixin extends EntityMixin implements ItemEntityB
             // erroneously be calling this twice.
             return;
         }
-        try (final CauseStackManager.StackFrame frame = PhaseTracker.getCauseStackManager().pushCauseFrame()) {
-            frame.pushCause(this);
-            final ExpireEntityEvent event = SpongeEventFactory.createExpireEntityEvent(frame.currentCause(), (Item) this);
-            SpongeCommon.post(event);
-        }
+        this.impl$callExpireEntityEvent();
     }
 
     @ModifyConstant(method = "isMergable", constant = @Constant(intValue = 6000))
     private int impl$isMergableUseDespawnRateFromConfig(final int originalValue) {
-        return SpongeGameConfigs.getForWorld(this.level).get().entity.item.despawnRate;
-    }
-
-    @ModifyConstant(method = "tick", constant = @Constant(intValue = 6000))
-    private int impl$tickUseDespawnRateFromConfig(final int originalValue) {
         return SpongeGameConfigs.getForWorld(this.level).get().entity.item.despawnRate;
     }
 

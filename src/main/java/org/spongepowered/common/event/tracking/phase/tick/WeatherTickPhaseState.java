@@ -24,24 +24,32 @@
  */
 package org.spongepowered.common.event.tracking.phase.tick;
 
-import org.spongepowered.api.event.CauseStackManager;
+import net.minecraft.world.entity.Entity;
+import org.spongepowered.api.event.cause.entity.SpawnType;
+import org.spongepowered.api.event.cause.entity.SpawnTypes;
 import org.spongepowered.common.event.tracking.PhaseTracker;
 import org.spongepowered.common.event.tracking.TrackingUtil;
+
+import java.util.function.Supplier;
 
 class WeatherTickPhaseState extends TickPhaseState<TickContext.General> {
 
 
     @Override
     public TickContext.General createNewContext(final PhaseTracker tracker) {
-        return new TickContext.General(this, tracker).addCaptures();
+        return new TickContext.General(this, tracker);
     }
 
     @Override
     public void unwind(final TickContext.General phaseContext) {
-        try (final CauseStackManager.StackFrame frame = PhaseTracker.getCauseStackManager().pushCauseFrame()) {
-//            frame.addContext(EventContextKeys.SPAWN_TYPE, SpawnTypes.WEATHER);
-            TrackingUtil.processBlockCaptures(phaseContext);
-        }
+        TrackingUtil.processBlockCaptures(phaseContext);
+    }
+
+    @Override
+    public Supplier<SpawnType> getSpawnTypeForTransaction(
+        final TickContext.General context, final Entity entityToSpawn
+    ) {
+        return SpawnTypes.WEATHER;
     }
 
 }

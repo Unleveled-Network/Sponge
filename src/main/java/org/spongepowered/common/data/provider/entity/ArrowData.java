@@ -24,6 +24,8 @@
  */
 package org.spongepowered.common.data.provider.entity;
 
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.entity.projectile.Arrow;
 import org.spongepowered.api.data.Keys;
 import org.spongepowered.api.effect.potion.PotionEffect;
 import org.spongepowered.common.accessor.world.entity.projectile.ArrowAccessor;
@@ -31,8 +33,6 @@ import org.spongepowered.common.data.provider.DataProviderRegistrator;
 
 import java.util.Set;
 import java.util.stream.Collectors;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.entity.projectile.Arrow;
 
 public final class ArrowData {
 
@@ -46,9 +46,6 @@ public final class ArrowData {
                     .create(Keys.POTION_EFFECTS)
                         .get(h -> {
                             final Set<MobEffectInstance> effects = ((ArrowAccessor) h).accessor$effects();
-                            if (effects.isEmpty()) {
-                                return null;
-                            }
                             return effects.stream()
                                     .map(effect -> (PotionEffect) new MobEffectInstance(effect.getEffect(), effect.getDuration(),
                                             effect.getAmplifier(), effect.isAmbient(), effect.isVisible()))
@@ -57,7 +54,7 @@ public final class ArrowData {
                         .set((h, v) -> {
                             ((ArrowAccessor) h).accessor$effects().clear();
                             for (final PotionEffect effect : v) {
-                                final MobEffectInstance mcEffect = new MobEffectInstance(((MobEffectInstance) effect).getEffect(), effect.duration(),
+                                final MobEffectInstance mcEffect = new MobEffectInstance(((MobEffectInstance) effect).getEffect(), (int) effect.duration().ticks(),
                                         effect.amplifier(), effect.isAmbient(), effect.showsParticles());
                                 h.addEffect(mcEffect);
                             }

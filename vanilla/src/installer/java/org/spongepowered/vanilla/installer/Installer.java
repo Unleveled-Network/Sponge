@@ -31,7 +31,6 @@ import org.spongepowered.configurate.loader.ConfigurationLoader;
 import org.spongepowered.configurate.objectmapping.ObjectMapper;
 import org.spongepowered.configurate.objectmapping.meta.NodeResolver;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -56,8 +55,11 @@ public final class Installer {
                 )
                 .build();
         this.config = this.loadConfig();
-        this.libraryManager = new LibraryManager(this, Paths.get(this.config.librariesDirectory.replace("${BASE_DIRECTORY}",
-            directory.toAbsolutePath().toString())));
+        this.libraryManager = new LibraryManager(
+            this.config.checkLibraryHashes,
+            Paths.get(this.config.librariesDirectory.replace("${BASE_DIRECTORY}", directory.toAbsolutePath().toString())),
+            this.getClass().getResource("/libraries.json")
+        );
     }
 
     private LauncherConfig loadConfig() throws ConfigurateException {

@@ -34,10 +34,6 @@ public interface ServerGamePacketListenerImplBridge {
 
     @Nullable ResourcePack bridge$popAcceptedResourcePack();
 
-    void bridge$resendLatestResourcePackRequest();
-
-    void bridge$captureCurrentPlayerPosition();
-
     void bridge$setLastMoveLocation(ServerLocation location);
 
     long bridge$getLastTryBlockPacketTimeStamp();

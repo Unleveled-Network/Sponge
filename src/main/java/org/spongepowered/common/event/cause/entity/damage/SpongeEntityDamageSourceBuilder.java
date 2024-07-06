@@ -30,6 +30,7 @@ import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.event.cause.entity.damage.source.EntityDamageSource;
 import org.spongepowered.api.event.cause.entity.damage.source.common.AbstractDamageSourceBuilder;
 import org.spongepowered.common.accessor.world.damagesource.DamageSourceAccessor;
+
 import java.lang.ref.WeakReference;
 
 public class SpongeEntityDamageSourceBuilder extends AbstractDamageSourceBuilder<EntityDamageSource, EntityDamageSource.Builder>
@@ -68,6 +69,9 @@ public class SpongeEntityDamageSourceBuilder extends AbstractDamageSourceBuilder
         }
         if (this.explosion) {
             damageSource.setExplosion();
+        }
+        if (this.fire) {
+            accessor.invoker$setIsFire();
         }
         if (this.exhaustion != null) {
             accessor.accessor$exhaustion(this.exhaustion.floatValue());

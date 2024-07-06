@@ -35,10 +35,10 @@ import org.spongepowered.api.event.lifecycle.ProvideServiceEvent;
 import org.spongepowered.api.service.ServiceProvider;
 import org.spongepowered.api.service.ServiceRegistration;
 import org.spongepowered.common.SpongeCommon;
-import org.spongepowered.common.applaunch.config.core.SpongeConfigs;
 import org.spongepowered.common.applaunch.config.common.ServicesCategory;
-import org.spongepowered.common.event.SpongeEventManager;
+import org.spongepowered.common.applaunch.config.core.SpongeConfigs;
 import org.spongepowered.common.event.lifecycle.AbstractProvideServiceEventImpl;
+import org.spongepowered.common.event.manager.SpongeEventManager;
 import org.spongepowered.common.launch.Launch;
 import org.spongepowered.common.util.PrettyPrinter;
 import org.spongepowered.plugin.PluginContainer;
@@ -212,7 +212,10 @@ public abstract class SpongeServiceProvider implements ServiceProvider {
         try {
             ((SpongeEventManager) this.getGame().eventManager()).postToPlugin(event, container);
         } catch (final Exception ex) {
-            ex.printStackTrace();
+            SpongeCommon.logger().error("Failed to post ProvideServiceEvent for service {} to plugin {}.",
+                    service.getServiceClass().getSimpleName(),
+                    container.metadata().id(),
+                    ex);
         }
         if (event.getSuggestion() != null) {
             try {

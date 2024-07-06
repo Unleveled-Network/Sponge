@@ -24,20 +24,6 @@
  */
 package org.spongepowered.common.mixin.core.world.level.block;
 
-import org.spongepowered.api.world.server.ServerLocation;
-import org.spongepowered.api.world.server.ServerWorld;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
-import org.spongepowered.common.bridge.world.level.block.entity.CampfireBlockEntityBridge;
-import org.spongepowered.common.bridge.world.damagesource.DamageSourceBridge;
-import org.spongepowered.common.mixin.core.block.BlockMixin;
-import org.spongepowered.common.util.MinecraftBlockDamageSource;
-
-import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -52,6 +38,20 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.CampfireBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
+import org.spongepowered.api.world.server.ServerLocation;
+import org.spongepowered.api.world.server.ServerWorld;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
+import org.spongepowered.common.bridge.world.damagesource.DamageSourceBridge;
+import org.spongepowered.common.bridge.world.level.block.entity.CampfireBlockEntityBridge;
+import org.spongepowered.common.mixin.core.block.BlockMixin;
+import org.spongepowered.common.util.MinecraftBlockDamageSource;
+
+import java.util.Optional;
 
 @Mixin(CampfireBlock.class)
 public abstract class CampfireBlockMixin extends BlockMixin {
@@ -70,8 +70,8 @@ public abstract class CampfireBlockMixin extends BlockMixin {
         }
         try {
             final ServerLocation location = ServerLocation.of((ServerWorld) world, blockPos.getX(), blockPos.getY(), blockPos.getZ());
-            final MinecraftBlockDamageSource fire = new MinecraftBlockDamageSource("inFire", location);
-            ((DamageSourceBridge) (Object) fire).bridge$setFireSource();
+            final DamageSource fire = MinecraftBlockDamageSource.ofFire("inFire", location, true);
+            ((DamageSourceBridge) fire).bridge$setFireSource();
             return self.hurt(DamageSource.IN_FIRE, damage);
         } finally {
             // Since "source" is already the DamageSource.IN_FIRE object, we can re-use it to re-assign.

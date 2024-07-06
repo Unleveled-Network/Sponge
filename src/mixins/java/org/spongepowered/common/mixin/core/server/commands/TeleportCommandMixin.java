@@ -24,25 +24,6 @@
  */
 package org.spongepowered.common.mixin.core.server.commands;
 
-import org.spongepowered.api.event.CauseStackManager;
-import org.spongepowered.api.event.SpongeEventFactory;
-import org.spongepowered.api.event.EventContextKeys;
-import org.spongepowered.api.event.cause.entity.MovementTypes;
-import org.spongepowered.api.event.entity.ChangeEntityWorldEvent;
-import org.spongepowered.api.event.entity.MoveEntityEvent;
-import org.spongepowered.api.event.entity.RotateEntityEvent;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
-import org.spongepowered.common.SpongeCommon;
-import org.spongepowered.common.event.ShouldFire;
-import org.spongepowered.common.event.tracking.PhaseTracker;
-import org.spongepowered.common.hooks.PlatformHooks;
-import org.spongepowered.common.util.VecHelper;
-import org.spongepowered.math.vector.Vector3d;
-
-import java.util.Set;
-
-import javax.annotation.Nullable;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
@@ -55,6 +36,27 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.level.ChunkPos;
+import org.spongepowered.api.Sponge;
+import org.spongepowered.api.event.CauseStackManager;
+import org.spongepowered.api.event.EventContextKeys;
+import org.spongepowered.api.event.SpongeEventFactory;
+import org.spongepowered.api.event.cause.entity.MovementTypes;
+import org.spongepowered.api.event.entity.ChangeEntityWorldEvent;
+import org.spongepowered.api.event.entity.MoveEntityEvent;
+import org.spongepowered.api.event.entity.RotateEntityEvent;
+import org.spongepowered.api.world.server.ServerWorld;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Overwrite;
+import org.spongepowered.common.SpongeCommon;
+import org.spongepowered.common.event.ShouldFire;
+import org.spongepowered.common.event.tracking.PhaseTracker;
+import org.spongepowered.common.hooks.PlatformHooks;
+import org.spongepowered.common.util.VecHelper;
+import org.spongepowered.math.vector.Vector3d;
+
+import java.util.Set;
+
+import javax.annotation.Nullable;
 
 @Mixin(TeleportCommand.class)
 public abstract class TeleportCommandMixin {
@@ -186,8 +188,13 @@ public abstract class TeleportCommandMixin {
                     worldIn.addFromAnotherDimension(result);
                     entityIn.removed = true;
 
-                    PlatformHooks.INSTANCE.getEventHooks().callChangeEntityWorldEventPost(result, fromWorld,
-                            (ServerLevel) preEvent.originalDestinationWorld());
+                    Sponge.eventManager().post(SpongeEventFactory.createChangeEntityWorldEventPost(
+                            PhaseTracker.getCauseStackManager().currentCause(),
+                            (org.spongepowered.api.entity.Entity) result,
+                            (ServerWorld) fromWorld,
+                            preEvent.originalDestinationWorld(),
+                            preEvent.destinationWorld()
+                    ));
                 }
             }
         }

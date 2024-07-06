@@ -33,9 +33,19 @@ import com.google.common.collect.HashBiMap;
 import com.google.common.collect.Lists;
 import com.mojang.brigadier.arguments.ArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.minecraft.commands.arguments.CompoundTagArgument;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Registry;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
+import net.minecraft.nbt.FloatTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.LevelResource;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.data.persistence.DataContentUpdater;
 import org.spongepowered.api.data.persistence.DataQuery;
@@ -77,17 +87,6 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.function.Supplier;
-
-import net.minecraft.commands.arguments.CompoundTagArgument;
-import net.minecraft.commands.arguments.ResourceLocationArgument;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Registry;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.DoubleTag;
-import net.minecraft.nbt.FloatTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.world.inventory.ClickType;
-import net.minecraft.world.level.storage.LevelResource;
 
 /**
  * A standard class where all various "constants" for various data are stored.
@@ -296,8 +295,8 @@ public final class Constants {
         public static final class Schematic {
 
             public static final DataQuery NAME = of("Name");
-            public static final int CURRENT_VERSION = 2;
-            public static final int MAX_SIZE = 65535;
+            public static final int CURRENT_VERSION = 3;
+            public static final int MAX_SIZE = Integer.MAX_VALUE & 0xFFFF;
             public static final DataQuery VERSION = of("Version");
             public static final DataQuery DATA_VERSION = of("DataVersion");
             public static final DataQuery METADATA = of("Metadata");
@@ -306,23 +305,35 @@ public final class Constants {
             public static final DataQuery HEIGHT = of("Height");
             public static final DataQuery LENGTH = of("Length");
             public static final DataQuery OFFSET = of("Offset");
+            public static final DataQuery BLOCK_PALETTE = of("Palette");
+            public static final DataQuery BLOCK_CONTAINER = of("Blocks");
+            public static final DataQuery BIOME_CONTAINER = of("Biomes");
             public static final DataQuery PALETTE = of("Palette");
-            public static final DataQuery PALETTE_MAX = of("PaletteMax");
-            public static final DataQuery BLOCK_DATA = of("BlockData");
-            public static final DataQuery BIOME_DATA = of("BiomeData");
-            public static final DataQuery BLOCKENTITY_DATA = of("BlockEntities");
+            public static final DataQuery BLOCK_DATA = of("Data");
+            public static final DataQuery BIOME_DATA = of("Data");
+            public static final DataQuery BLOCKENTITY_CONTAINER = of("BlockEntities");
+            public static final DataQuery BLOCKENTITY_DATA = of("Data");
             public static final DataQuery BLOCKENTITY_ID = of("Id");
             public static final DataQuery BLOCKENTITY_POS = of("Pos");
             public static final DataQuery ENTITIES = of("Entities");
             public static final DataQuery ENTITIES_ID = of("Id");
             public static final DataQuery ENTITIES_POS = of("Pos");
-            public static final DataQuery BIOME_PALETTE = of("BiomePalette");
-            public static final DataQuery BIOME_PALETTE_MAX = of("BiomePaletteMax");
+            public static final DataQuery BIOME_PALETTE = of("Palette");
+            public static final DataQuery SCHEMATIC = of("Schematic");
 
             public static final class Versions {
 
                 public static final DataQuery V1_TILE_ENTITY_DATA = of("TileEntities");
                 public static final DataQuery V1_TILE_ENTITY_ID = of("id");
+
+                public static final DataQuery V1_BLOCK_PALETTE = of("Palette");
+                public static final DataQuery V1_BLOCK_PALETTE_MAX = of("Palette");
+                public static final DataQuery V2_BLOCK_PALETTE = of("Palette");
+                public static final DataQuery V2_BIOME_PALETTE = of("BiomePalette");
+                public static final DataQuery V2_BLOCK_DATA = of("BlockData");
+                public static final DataQuery V2_BIOME_DATA = of("BiomeData");
+                public static final DataQuery V2_BLOCK_ENTITIES = of("BlockEntities");
+
             }
 
             /**
@@ -413,10 +424,8 @@ public final class Constants {
     public static final class World {
 
         public static final Vector3i BLOCK_MIN = new Vector3i(-30000000, 0, -30000000);
-        public static final Vector3i BIOME_MIN = new Vector3i(Constants.World.BLOCK_MIN.x(), 0, Constants.World.BLOCK_MIN.z());
         public static final Vector3i BLOCK_MAX = new Vector3i(30000000, 256, 30000000).sub(Vector3i.ONE);
         public static final Vector3i BLOCK_SIZE = Constants.World.BLOCK_MAX.sub(Constants.World.BLOCK_MIN).add(Vector3i.ONE);
-        public static final Vector3i BIOME_MAX = new Vector3i(Constants.World.BLOCK_MAX.x(), 256, Constants.World.BLOCK_MAX.z());
         public static final EnumSet<net.minecraft.core.Direction> NOTIFY_DIRECTION_SET = EnumSet
             .of(net.minecraft.core.Direction.WEST, net.minecraft.core.Direction.EAST, net.minecraft.core.Direction.DOWN,
                 net.minecraft.core.Direction.UP, net.minecraft.core.Direction.NORTH, net.minecraft.core.Direction.SOUTH);
@@ -497,7 +506,6 @@ public final class Constants {
         public static final int PACKET_BUTTON_SECONDARY_ID = 0;
         public static final int PACKET_BUTTON_MIDDLE_ID = 0;
         public static final InetSocketAddress LOCALHOST = InetSocketAddress.createUnresolved("127.0.0.1", 0);
-        public static final int MAGIC_TRIGGER_TELEPORT_CONFIRM_DIFF = 21;
     }
 
     public static final class Item {
@@ -505,10 +513,14 @@ public final class Constants {
         // These are the various tag compound id's for getting to various places
         public static final String BLOCK_ENTITY_TAG = "BlockEntityTag";
         public static final String BLOCK_ENTITY_ID = "id";
+        public static final String ENTITY_TAG = "EntityTag";
         public static final String ITEM_ENCHANTMENT_LIST = "Enchantments";
         public static final String ITEM_STORED_ENCHANTMENTS_LIST = "StoredEnchantments";
         public static final String ITEM_DISPLAY = "display";
         public static final String ITEM_LORE = "Lore";
+        public static final String ITEM_NAME = "Name";
+        public static final String ITEM_ORIGINAL_LORE = "SpongeOriginalLore";
+        public static final String ITEM_ORIGINAL_NAME = "SpongeOriginalName";
         public static final String ITEM_ENCHANTMENT_ID = "id";
         public static final String ITEM_ENCHANTMENT_LEVEL = "lvl";
         public static final String ITEM_BREAKABLE_BLOCKS = "CanDestroy";
@@ -543,6 +555,7 @@ public final class Constants {
             public static final DataQuery POTION_TYPE = of("PotionType");
             public static final DataQuery POTION_AMPLIFIER = of("Amplifier");
             public static final DataQuery POTION_SHOWS_PARTICLES = of("ShowsParticles");
+            public static final DataQuery POTION_SHOWS_ICON = of("ShowsIcon");
             public static final DataQuery POTION_AMBIANCE = of("Ambiance");
             public static final DataQuery POTION_DURATION = of("Duration");
         }
@@ -866,7 +879,8 @@ public final class Constants {
             public static final double PLAYER_Y_OFFSET = -0.35D;
 
             public static final class Abilities {
-                public static final String IS_FLYING = "flying";
+                public static final DataQuery IS_FLYING = of("abilities", "flying");
+                public static final DataQuery CAN_FLY = of("abilities", "mayfly");
             }
         }
 
@@ -989,6 +1003,7 @@ public final class Constants {
             | Constants.BlockChangeFlags.DENY_NEIGHBOR_SHAPE_UPDATE
             | Constants.BlockChangeFlags.NEIGHBOR_DROPS
             | Constants.BlockChangeFlags.PATHFINDING_UPDATES
+            | Constants.BlockChangeFlags.LIGHTING_UPDATES
             ;
 
 
@@ -1173,6 +1188,7 @@ public final class Constants {
         public static final DataQuery Y_POS = of("y");
         public static final DataQuery Z_POS = of("z");
         public static final DataQuery W_POS = of("w");
+        public static final DataQuery DIRECTION = of("Direction");
     }
 
     public static final class Fluids {

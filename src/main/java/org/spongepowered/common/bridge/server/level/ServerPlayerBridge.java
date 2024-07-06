@@ -30,16 +30,12 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.dimension.DimensionType;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.data.type.SkinPart;
-import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.scoreboard.Scoreboard;
 import org.spongepowered.common.bridge.network.ConnectionBridge;
 import org.spongepowered.common.entity.player.ClientType;
@@ -61,8 +57,6 @@ public interface ServerPlayerBridge extends ServerPlayerEntityHealthScaleBridge 
 
     int bridge$getViewDistance();
 
-    @Nullable User bridge$getUserObject();
-
     Locale bridge$getLanguage();
 
     void bridge$setLanguage(Locale language);
@@ -75,14 +69,9 @@ public interface ServerPlayerBridge extends ServerPlayerEntityHealthScaleBridge 
 
     void bridge$setScoreboardOnRespawn(Scoreboard scoreboard);
 
-    void bridge$restorePacketItem(InteractionHand hand);
-
-    void bridge$setPacketItem(ItemStack itemstack);
-
     void bridge$refreshExp();
 
     PlayerOwnBorderListener bridge$getWorldBorderListener();
-
 
     boolean bridge$hasForcedGamemodeOverridePermission();
 
@@ -93,8 +82,6 @@ public interface ServerPlayerBridge extends ServerPlayerEntityHealthScaleBridge 
     Set<SkinPart> bridge$getSkinParts();
 
     void bridge$setSkinParts(final Set<SkinPart> skinParts);
-
-    @Nullable User bridge$getUser();
 
     net.minecraft.network.chat.@Nullable Component bridge$getConnectionMessageToSend();
 
@@ -114,6 +101,11 @@ public interface ServerPlayerBridge extends ServerPlayerEntityHealthScaleBridge 
 
     boolean bridge$kick(final Component message);
 
-    Entity bridge$performGameWinLogic();
+    boolean bridge$sleepingIgnored();
 
+    void bridge$setSleepingIgnored(final boolean sleepingIgnored);
+
+    double bridge$reachDistance();
+
+    void bridge$setGameModeNoEvent(final GameType gameType);
 }

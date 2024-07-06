@@ -30,12 +30,21 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.collect.MapMaker;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Queues;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.chunk.LevelChunk;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.checkerframework.framework.qual.DefaultQualifier;
+import org.spongepowered.api.Sponge;
 import org.spongepowered.api.event.Cause;
 import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.event.EventContext;
@@ -70,14 +79,6 @@ import java.util.Optional;
 import java.util.StringJoiner;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiConsumer;
-import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.minecraft.world.level.chunk.LevelChunk;
 
 /**
  * The core state machine of Sponge. Acts a as proxy between various engine objects by processing actions through
@@ -238,29 +239,29 @@ public final class PhaseTracker implements CauseStackManager {
             return;
         }
         this.hasRun = true;
-        Task.builder()
-            .name("Sponge Async To Sync Entity Spawn Task")
-            .interval(Ticks.single())
-            .execute(() -> {
-                if (PhaseTracker.ASYNC_CAPTURED_ENTITIES.isEmpty()) {
-                    return;
-                }
-
-                final List<net.minecraft.world.entity.Entity> entities = new ArrayList<>(PhaseTracker.ASYNC_CAPTURED_ENTITIES);
-                PhaseTracker.ASYNC_CAPTURED_ENTITIES.removeAll(entities);
-                try (final CauseStackManager.StackFrame frame = this.pushCauseFrame()) {
-                    // We are forcing the spawn, as we can't throw the proper event at the proper time, so
-                    // we'll just mark it as "forced".
-                    frame.addContext(EventContextKeys.SPAWN_TYPE, SpongeSpawnTypes.FORCED);
-                    for (final net.minecraft.world.entity.Entity entity : entities) {
-                        // At this point, we don't care what the causes are...
-                        entity.getCommandSenderWorld().addFreshEntity(entity);
+        final Task task = Task.builder()
+                .interval(Ticks.single())
+                .execute(() -> {
+                    if (PhaseTracker.ASYNC_CAPTURED_ENTITIES.isEmpty()) {
+                        return;
                     }
-                }
 
-            })
-            .plugin(Launch.instance().commonPlugin())
-            .build();
+                    final List<Entity> entities = new ArrayList<>(PhaseTracker.ASYNC_CAPTURED_ENTITIES);
+                    PhaseTracker.ASYNC_CAPTURED_ENTITIES.removeAll(entities);
+                    try (final StackFrame frame = this.pushCauseFrame()) {
+                        // We are forcing the spawn, as we can't throw the proper event at the proper time, so
+                        // we'll just mark it as "forced".
+                        frame.addContext(EventContextKeys.SPAWN_TYPE, SpongeSpawnTypes.FORCED);
+                        for (final Entity entity : entities) {
+                            // At this point, we don't care what the causes are...
+                            entity.getCommandSenderWorld().addFreshEntity(entity);
+                        }
+                    }
+
+                })
+                .plugin(Launch.instance().commonPlugin())
+                .build();
+        Sponge.server().scheduler().submit(task, "Sponge Async To Sync Entity Spawn Task");
     }
 
     public void setThread(final @Nullable Thread thread) throws IllegalAccessException {
@@ -628,7 +629,7 @@ public final class PhaseTracker implements CauseStackManager {
                 throw new IllegalStateException("Cause Stack Frame Corruption! Attempted to pop a frame that was not on the stack.");
             }
             final PrettyPrinter printer = new PrettyPrinter(100).add("Cause Stack Frame Corruption!").centre().hr()
-                                              .add("Found %n frames left on the stack. Clearing them all.", new Object[]{offset + 1});
+                                              .add("Found %d frames left on the stack. Clearing them all.", new Object[]{offset + 1});
             if (!PhaseTracker.DEBUG_CAUSE_FRAMES) {
                 printer.add()
                     .add("Please add -Dsponge.debugcauseframes=true to your startup flags to enable further debugging output.");
@@ -645,7 +646,7 @@ public final class PhaseTracker implements CauseStackManager {
             while (offset >= 0) {
                 final @Nullable SpongeCauseStackFrame f = this.frames.peek();
                 if (PhaseTracker.DEBUG_CAUSE_FRAMES && offset > 0) {
-                    printer.add("   Stack frame in position %n :", offset);
+                    printer.add("   Stack frame in position %d :", new Object[]{offset});
                     printer.add(f.stackDebug);
                 }
                 this.popCauseFrame(f);
@@ -758,10 +759,10 @@ public final class PhaseTracker implements CauseStackManager {
         // to properly mimic as though the frames were created at the time of the
         // phase switches. It does not help the debugging of cause frames
         // except for this method call-point.
-        for (final Iterator<PhaseContext<?>> iterator = this.phaseContextProviders.descendingIterator(); iterator.hasNext(); ) {
-            final PhaseContext<?> tuple = iterator.next();
+        for (final Iterator<PhaseContext<@NonNull ?>> iterator = this.phaseContextProviders.descendingIterator(); iterator.hasNext(); ) {
+            final PhaseContext<@NonNull ?> context = iterator.next();
             final StackFrame frame = this.pushCauseFrame(); // these should auto close
-            ((BiConsumer) tuple.state.getFrameModifier()).accept(frame, tuple); // The frame will be auto closed by the phase context
+            context.getFrameModifier().accept(frame); // The frame will be auto closed by the phase context
         }
         // Clear the list since everything is now loaded.
         // PhaseStates will handle automatically closing their frames

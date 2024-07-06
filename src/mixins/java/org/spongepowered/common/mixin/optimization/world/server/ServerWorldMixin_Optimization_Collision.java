@@ -24,8 +24,12 @@
  */
 package org.spongepowered.common.mixin.optimization.world.server;
 
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.common.bridge.world.WorldBridge;
+import org.spongepowered.common.bridge.world.level.LevelBridge;
 import org.spongepowered.common.bridge.world.level.chunk.ActiveChunkReferantBridge;
 import org.spongepowered.common.bridge.world.level.chunk.LevelChunkBridge;
 import org.spongepowered.common.event.tracking.PhaseTracker;
@@ -33,17 +37,13 @@ import org.spongepowered.common.mixin.optimization.world.level.LevelReaderMixin_
 
 import java.util.Optional;
 import java.util.stream.Stream;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.AABB;
 
 @Mixin(value = ServerLevel.class, priority = 1500)
 public abstract class ServerWorldMixin_Optimization_Collision implements LevelReaderMixin_Optimization_Collision {
 
     @Override
     public Stream<BlockState> getBlockStatesIfLoaded(final AABB aabb) {
-        if (((WorldBridge) this).bridge$isFake()) {
+        if (((LevelBridge) this).bridge$isFake()) {
             return LevelReaderMixin_Optimization_Collision.super.getBlockStatesIfLoaded(aabb);
         }
         final Optional<ActiveChunkReferantBridge> source = PhaseTracker.getInstance().getPhaseContext().getSource(Entity.class)

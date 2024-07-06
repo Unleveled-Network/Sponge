@@ -37,13 +37,14 @@ import org.spongepowered.common.world.volume.SpongeVolumeStream;
 import org.spongepowered.common.world.volume.VolumeStreamUtils;
 import org.spongepowered.common.world.volume.buffer.block.AbstractBlockBuffer;
 import org.spongepowered.common.world.volume.buffer.block.ArrayMutableBlockBuffer;
+import org.spongepowered.math.vector.Vector3d;
 import org.spongepowered.math.vector.Vector3i;
 
 import java.util.function.Function;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-public abstract class AbstractMutableBlockEntityBuffer<M extends AbstractMutableBlockEntityBuffer<M>> extends AbstractBlockBuffer implements BlockEntityVolume.Mutable<M> {
+public abstract class AbstractMutableBlockEntityBuffer extends AbstractBlockBuffer implements BlockEntityVolume.Mutable {
 
     // This is our backing block buffer
     private final ArrayMutableBlockBuffer blockBuffer;
@@ -92,25 +93,22 @@ public abstract class AbstractMutableBlockEntityBuffer<M extends AbstractMutable
         return this.blockBuffer.highestYAt(x, z);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public VolumeStream<M, BlockState> blockStateStream(final Vector3i min, final Vector3i max,
+    public VolumeStream<BlockEntityVolume.Mutable, BlockState> blockStateStream(final Vector3i min, final Vector3i max,
         final StreamOptions options) {
-        final Vector3i blockMin = this.blockMin();
-        final Vector3i blockMax = this.blockMax();
-        VolumeStreamUtils.validateStreamArgs(min, max, blockMin, blockMax, options);
+        VolumeStreamUtils.validateStreamArgs(min, max, this.min(), this.max(), options);
         final ArrayMutableBlockBuffer buffer;
         if (options.carbonCopy()) {
             buffer = this.blockBuffer.copy();
         } else {
             buffer = this.blockBuffer;
         }
-        final Stream<VolumeElement<M, BlockState>> stateStream = IntStream.range(blockMin.x(), blockMax.x() + 1)
-            .mapToObj(x -> IntStream.range(blockMin.z(), blockMax.z() + 1)
-                .mapToObj(z -> IntStream.range(blockMin.y(), blockMax.y() + 1)
-                    .mapToObj(y -> VolumeElement.of((M) this, () -> buffer.block(x, y, z), new Vector3i(x, y, z)))
+        final Stream<VolumeElement<BlockEntityVolume.Mutable, BlockState>> stateStream = IntStream.range(min.x(), max.x() + 1)
+            .mapToObj(x -> IntStream.range(min.z(), max.z() + 1)
+                .mapToObj(z -> IntStream.range(min.y(), max.y() + 1)
+                    .mapToObj(y -> VolumeElement.of((BlockEntityVolume.Mutable) this, () -> buffer.block(x, y, z), new Vector3d(x, y, z)))
                 ).flatMap(Function.identity())
             ).flatMap(Function.identity());
-        return new SpongeVolumeStream<>(stateStream, () -> (M) this);
+        return new SpongeVolumeStream<>(stateStream, () -> this);
     }
 }

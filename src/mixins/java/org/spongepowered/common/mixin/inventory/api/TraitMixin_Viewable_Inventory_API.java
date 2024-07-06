@@ -24,6 +24,15 @@
  */
 package org.spongepowered.common.mixin.inventory.api;
 
+import net.minecraft.world.CompoundContainer;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.npc.AbstractVillager;
+import net.minecraft.world.entity.npc.ClientSideMerchant;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.vehicle.AbstractMinecartContainer;
+import net.minecraft.world.inventory.PlayerEnderChestContainer;
+import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
+import net.minecraft.world.level.block.entity.LecternBlockEntity;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.item.inventory.menu.InventoryMenu;
 import org.spongepowered.api.item.inventory.type.ViewableInventory;
@@ -34,14 +43,7 @@ import org.spongepowered.common.inventory.custom.ViewableCustomInventory;
 
 import java.util.Collections;
 import java.util.Set;
-import net.minecraft.world.CompoundContainer;
-import net.minecraft.world.Container;
-import net.minecraft.world.entity.npc.AbstractVillager;
-import net.minecraft.world.entity.npc.ClientSideMerchant;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.entity.vehicle.AbstractMinecartContainer;
-import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
-import net.minecraft.world.level.block.entity.LecternBlockEntity;
+import java.util.stream.Collectors;
 
 /**
  * {@link org.spongepowered.common.mixin.inventory.impl.TraitMixin_ViewableBridge_Inventory}
@@ -57,13 +59,14 @@ import net.minecraft.world.level.block.entity.LecternBlockEntity;
         ClientSideMerchant.class,
         // ChestBlock - DoubleSidedInventory
         CompoundContainer.class,
+        PlayerEnderChestContainer.class
 }, priority = 999)
 public abstract class TraitMixin_Viewable_Inventory_API implements ViewableInventory {
 
     @Override
     public Set<ServerPlayer> viewers() {
         if (this instanceof ViewableInventoryBridge) {
-            return ((ViewableInventoryBridge) this).viewableBridge$getViewers();
+            return ((ViewableInventoryBridge) this).viewableBridge$getViewers().stream().map(ServerPlayer.class::cast).collect(Collectors.toSet());
         }
         return Collections.emptySet();
     }

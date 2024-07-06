@@ -24,21 +24,16 @@
  */
 package org.spongepowered.common.bridge.world.entity;
 
-import org.checkerframework.checker.nullness.qual.Nullable;
-import org.spongepowered.api.event.cause.entity.DismountType;
-import org.spongepowered.api.event.entity.ChangeEntityWorldEvent;
-import org.spongepowered.api.util.Transform;
-import org.spongepowered.api.world.server.ServerLocation;
-import org.spongepowered.common.event.tracking.phase.tick.EntityTickContext;
-import org.spongepowered.common.world.portal.PlatformTeleporter;
-import org.spongepowered.math.vector.Vector3d;
-
-import java.util.Optional;
-import net.minecraft.BlockUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.portal.PortalInfo;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.spongepowered.api.event.cause.entity.DismountType;
+import org.spongepowered.api.event.entity.ChangeEntityWorldEvent;
+import org.spongepowered.api.world.server.ServerLocation;
+import org.spongepowered.common.event.tracking.phase.tick.EntityTickContext;
+import org.spongepowered.common.world.portal.PortalLogic;
+import org.spongepowered.math.vector.Vector3d;
 
 public interface EntityBridge {
 
@@ -46,19 +41,19 @@ public interface EntityBridge {
 
     void bridge$fireConstructors();
 
+    boolean bridge$isPlayerTouchDeclared();
+
     boolean bridge$removePassengers(DismountType type);
 
-    void bridge$setImplVelocity(Vector3d velocity);
-
     @Nullable BlockPos bridge$getLastCollidedBlockPos();
-
-    void bridge$setTransform(Transform transform);
 
     void bridge$setFireImmuneTicks(int ticks);
 
     default void bridge$clearWrappedCaptureList() {
 
     }
+
+    boolean bridge$setPosition(Vector3d position);
 
     boolean bridge$setLocation(ServerLocation location);
 
@@ -78,26 +73,7 @@ public interface EntityBridge {
 
     boolean bridge$dismountRidingEntity(DismountType type);
 
-    Optional<BlockUtil.FoundRectangle> bridge$determineExitPortal(ServerLevel targetWorld, BlockPos targetPosition, boolean targetIsNether,
-            boolean shouldFireEvent);
-
-    Entity bridge$changeDimension(ServerLevel targetWorld, PlatformTeleporter teleporter);
-
-    default void bridge$setPlayerChangingDimensions() {
-    }
-
-    default void bridge$playerPrepareForPortalTeleport(final ServerLevel currentWorld, final ServerLevel targetWorld) {
-    }
-
-    default void bridge$validateEntityAfterTeleport(final Entity e, final PlatformTeleporter teleporter) {
-    }
-
-    Entity bridge$portalRepositioning(final boolean createEndPlatform,
-            final ServerLevel serverworld,
-            final ServerLevel targetWorld,
-            final PortalInfo portalinfo);
-
-    void bridge$postPortalForceChangeTasks(Entity entity, ServerLevel targetWorld, boolean isVanilla);
+    Entity bridge$changeDimension(ServerLevel targetWorld, PortalLogic teleporter);
 
     ChangeEntityWorldEvent.Reposition bridge$fireRepositionEvent(org.spongepowered.api.world.server.ServerWorld originalDestinationWorld,
             org.spongepowered.api.world.server.ServerWorld targetWorld,

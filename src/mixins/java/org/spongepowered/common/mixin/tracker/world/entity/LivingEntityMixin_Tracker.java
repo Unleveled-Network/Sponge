@@ -24,22 +24,33 @@
  */
 package org.spongepowered.common.mixin.tracker.world.entity;
 
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.damagesource.CombatEntry;
+import net.minecraft.world.damagesource.CombatTracker;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.spongepowered.api.event.CauseStackManager;
+import org.spongepowered.api.event.EventContextKeys;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.common.bridge.world.WorldBridge;
+import org.spongepowered.common.accessor.world.damagesource.CombatEntryAccessor;
+import org.spongepowered.common.accessor.world.damagesource.CombatTrackerAccessor;
+import org.spongepowered.common.bridge.world.level.LevelBridge;
 import org.spongepowered.common.event.tracking.PhaseContext;
 import org.spongepowered.common.event.tracking.PhaseTracker;
 import org.spongepowered.common.event.tracking.context.transaction.EffectTransactor;
+import org.spongepowered.common.event.tracking.phase.entity.EntityPhase;
+import org.spongepowered.common.event.tracking.phase.tick.EntityTickContext;
+
+import java.util.List;
+import java.util.Random;
 
 import javax.annotation.Nullable;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.damagesource.CombatTracker;
-import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityMixin_Tracker extends EntityMixin_Tracker {
@@ -61,7 +72,31 @@ public abstract class LivingEntityMixin_Tracker extends EntityMixin_Tracker {
     @Shadow protected abstract void shadow$createWitherRose(@Nullable LivingEntity p_226298_1_);
     @Shadow public abstract boolean shadow$isEffectiveAi();
     @Shadow public abstract void shadow$swing(InteractionHand p_184609_1_);
+    @Shadow protected abstract void shadow$pushEntities();
+    @Shadow public abstract float shadow$getHealth();
+    @Shadow public abstract Random shadow$getRandom();
+    @Shadow public int deathTime;
     // @formatter:on
+
+    @Override
+    protected void tracker$populateDeathContextIfNeeded(
+        final CauseStackManager.StackFrame frame, final EntityTickContext context
+    ) {
+        if (!(this.shadow$getHealth() <= 0) && this.deathTime<=0 && !this.dead) {
+            return;
+        }
+        final List<CombatEntry> entries = ((CombatTrackerAccessor) this.shadow$getCombatTracker()).accessor$entries();
+        if (!entries.isEmpty()) {
+            final CombatEntry entry = entries.get(entries.size() - 1);
+            final DamageSource source = ((CombatEntryAccessor) entry).accessor$source();
+            if (source != null) {
+                frame.addContext(
+                    EventContextKeys.LAST_DAMAGE_SOURCE,
+                    (org.spongepowered.api.event.cause.entity.damage.source.DamageSource) source
+                );
+            }
+        }
+    }
 
     /**
      * @author i509VCB
@@ -82,7 +117,7 @@ public abstract class LivingEntityMixin_Tracker extends EntityMixin_Tracker {
             this.shadow$tickDeath();
             return;
         }
-        if (((WorldBridge) this.level).bridge$isFake()) {
+        if (((LevelBridge) this.level).bridge$isFake()) {
             this.shadow$tickDeath();
             return;
         }
@@ -112,7 +147,7 @@ public abstract class LivingEntityMixin_Tracker extends EntityMixin_Tracker {
         if (!instance.onSidedThread()) {
             return;
         }
-        if (((WorldBridge) this.level).bridge$isFake()) {
+        if (((LevelBridge) this.level).bridge$isFake()) {
             return;
         }
         final PhaseContext<@NonNull ?> context = instance.getPhaseContext();
@@ -126,4 +161,40 @@ public abstract class LivingEntityMixin_Tracker extends EntityMixin_Tracker {
         }
         // Sponge End
     }
+
+    @Redirect(
+        method = "aiStep",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;pushEntities()V")
+    )
+    private void tracker$switchIntoCollisions(final LivingEntity livingEntity) {
+        if (this.level.isClientSide) {
+            this.shadow$pushEntities();
+            return;
+        }
+        try (final PhaseContext<@NonNull ?> context = EntityPhase.State.COLLISION
+            .createPhaseContext(PhaseTracker.SERVER)
+            .source(livingEntity)
+        ) {
+            context.buildAndSwitch();
+            this.shadow$pushEntities();
+        }
+    }
+
+    @Redirect(
+        method = "tickEffects",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/world/effect/MobEffectInstance;tick(Lnet/minecraft/world/entity/LivingEntity;Ljava/lang/Runnable;)Z"
+        )
+    )
+    private boolean impl$wrapEffectWithFrame(
+        final MobEffectInstance instance, final LivingEntity thisEntity, final Runnable runnable) {
+        try {
+            PhaseTracker.getInstance().pushCause(instance); // push the PotionEffect
+            return instance.tick(thisEntity, runnable);
+        } finally {
+            PhaseTracker.getInstance().popCause();
+        }
+    }
+
 }

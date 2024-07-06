@@ -24,22 +24,29 @@
  */
 package org.spongepowered.vanilla.mixin.core.server.level;
 
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.dimension.DimensionType;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
-import org.spongepowered.common.bridge.world.entity.EntityBridge;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.common.bridge.server.level.ServerPlayerBridge;
 import org.spongepowered.common.entity.player.ClientType;
+import org.spongepowered.common.event.tracking.PhaseContext;
+import org.spongepowered.common.event.tracking.PhaseTracker;
+import org.spongepowered.common.event.tracking.context.transaction.EffectTransactor;
+import org.spongepowered.common.event.tracking.context.transaction.TransactionalCaptureSupplier;
+import org.spongepowered.common.event.tracking.context.transaction.inventory.PlayerInventoryTransaction;
 import org.spongepowered.common.network.packet.ChangeViewerEnvironmentPacket;
 import org.spongepowered.common.network.packet.SpongePacketHandler;
-import org.spongepowered.common.world.portal.VanillaPortalPlatformTeleporter;
-import org.spongepowered.vanilla.mixin.core.entity.player.EntityMixin_Vanilla;
+import org.spongepowered.common.world.portal.PortalLogic;
+import org.spongepowered.vanilla.mixin.core.world.entity.LivingEntityMixin_Vanilla;
+
 import javax.annotation.Nullable;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.dimension.DimensionType;
 
 @Mixin(net.minecraft.server.level.ServerPlayer.class)
-public abstract class ServerPlayerMixin_Vanilla extends EntityMixin_Vanilla implements ServerPlayerBridge {
+public abstract class ServerPlayerMixin_Vanilla extends LivingEntityMixin_Vanilla implements ServerPlayerBridge {
 
     @Override
     public void bridge$sendViewerEnvironment(final DimensionType dimensionType) {
@@ -66,7 +73,18 @@ public abstract class ServerPlayerMixin_Vanilla extends EntityMixin_Vanilla impl
     @Overwrite
     @Nullable
     public net.minecraft.world.entity.Entity changeDimension(final ServerLevel target) {
-        return this.bridge$changeDimension(target, VanillaPortalPlatformTeleporter.getNetherInstance());
+        return this.bridge$changeDimension(target, (PortalLogic) target.getPortalForcer());
+    }
+
+    // override from LivingEntityMixin_Vanilla
+    @Override
+    protected void vanilla$onElytraUse(final CallbackInfo ci) {
+        final PhaseContext<@NonNull ?> context = PhaseTracker.SERVER.getPhaseContext();
+        final TransactionalCaptureSupplier transactor = context.getTransactor();
+        final net.minecraft.server.level.ServerPlayer player = (net.minecraft.server.level.ServerPlayer) (Object) this;
+        try (final EffectTransactor ignored = transactor.logPlayerInventoryChangeWithEffect(player, PlayerInventoryTransaction.EventCreator.STANDARD)) {
+            player.inventoryMenu.broadcastChanges(); // capture
+        }
     }
 
 }

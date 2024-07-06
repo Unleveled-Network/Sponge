@@ -53,8 +53,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.common.accessor.commands.CommandSourceStackAccessor;
 import org.spongepowered.common.accessor.world.entity.EntityAccessor;
-import org.spongepowered.common.bridge.commands.CommandSourceStackBridge;
 import org.spongepowered.common.bridge.commands.CommandSourceBridge;
+import org.spongepowered.common.bridge.commands.CommandSourceStackBridge;
 import org.spongepowered.common.event.tracking.PhaseTracker;
 import org.spongepowered.common.service.server.permission.SpongePermissions;
 import org.spongepowered.common.util.VecHelper;
@@ -233,8 +233,16 @@ public abstract class CommandSourceStackMixin implements CommandSourceStackBridg
         return (CommandCause) this;
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private <T> Cause impl$applyToCause(final EventContextKey<T> key, final T value) {
-        final EventContext.Builder builder = EventContext.builder().from(this.impl$cause.context());
+        final EventContext.Builder builder = EventContext.builder();
+        // We don't use from() here as we might need to replace a context
+        // See https://github.com/SpongePowered/Sponge/issues/3495
+        this.impl$cause.context().asMap().forEach((k, v) -> {
+            if (!k.equals(key)) {
+                builder.add((EventContextKey) k, v);
+            }
+        });
         builder.add(key, value);
         return Cause.builder().from(this.impl$cause).build(builder.build());
     }

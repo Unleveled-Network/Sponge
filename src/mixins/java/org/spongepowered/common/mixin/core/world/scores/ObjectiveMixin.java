@@ -24,6 +24,10 @@
  */
 package org.spongepowered.common.mixin.core.world.scores;
 
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.scores.Objective;
+import net.minecraft.world.scores.Scoreboard;
+import net.minecraft.world.scores.criteria.ObjectiveCriteria;
 import org.spongepowered.api.scoreboard.objective.displaymode.ObjectiveDisplayMode;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -38,10 +42,6 @@ import org.spongepowered.common.bridge.world.scores.ScoreboardBridge;
 import org.spongepowered.common.scoreboard.SpongeObjective;
 
 import javax.annotation.Nullable;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.scores.Objective;
-import net.minecraft.world.scores.Scoreboard;
-import net.minecraft.world.scores.criteria.ObjectiveCriteria;
 
 @Mixin(Objective.class)
 public abstract class ObjectiveMixin implements ObjectiveBridge {
@@ -73,8 +73,8 @@ public abstract class ObjectiveMixin implements ObjectiveBridge {
             ci.cancel();
             return;
         }
-        this.impl$spongeScoreboard.setDisplayName(SpongeAdventure.asAdventure(name));
-        ci.cancel();
+
+        this.impl$spongeScoreboard.storeDisplayName(SpongeAdventure.asAdventure(name));
     }
 
     @SuppressWarnings("ConstantConditions")
@@ -89,7 +89,7 @@ public abstract class ObjectiveMixin implements ObjectiveBridge {
             ci.cancel();
             return;
         }
-        this.impl$spongeScoreboard.setDisplayMode((ObjectiveDisplayMode) (Object) type);
-        ci.cancel();
+
+        this.impl$spongeScoreboard.storeDisplayMode((ObjectiveDisplayMode) (Object) type);
     }
 }

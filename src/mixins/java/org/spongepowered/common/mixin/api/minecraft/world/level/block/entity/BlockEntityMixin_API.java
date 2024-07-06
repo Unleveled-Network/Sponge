@@ -24,6 +24,9 @@
  */
 package org.spongepowered.common.mixin.api.minecraft.world.level.block.entity;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Registry;
+import net.minecraft.nbt.CompoundTag;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.block.entity.BlockEntity;
@@ -34,8 +37,8 @@ import org.spongepowered.api.data.persistence.DataView;
 import org.spongepowered.api.data.persistence.Queries;
 import org.spongepowered.api.data.value.Value;
 import org.spongepowered.api.world.LocatableBlock;
-import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.api.world.World;
+import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.api.world.server.ServerWorld;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -51,9 +54,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 import javax.annotation.Nullable;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Registry;
-import net.minecraft.nbt.CompoundTag;
 
 @Mixin(net.minecraft.world.level.block.entity.BlockEntity.class)
 public abstract class BlockEntityMixin_API implements BlockEntity {
@@ -117,10 +117,6 @@ public abstract class BlockEntityMixin_API implements BlockEntity {
         this.shadow$save(compound);
         Constants.NBT.filterSpongeCustomData(compound); // We must filter the custom data so it isn't stored twice
         container.set(Constants.Sponge.UNSAFE_NBT, NBTTranslator.INSTANCE.translateFrom(compound));
-//        final Collection<Mutable<?, ?>> manipulators = ((CustomDataHolderBridge) this).bridge$getCustomManipulators();
-//        if (!manipulators.isEmpty()) {
-//            container.set(Constants.Sponge.DATA_MANIPULATORS, DataUtil.getSerializedManipulatorList(manipulators));
-//        }
         return container;
     }
 
@@ -156,10 +152,9 @@ public abstract class BlockEntityMixin_API implements BlockEntity {
 
     @Override
     public BlockEntityArchetype createArchetype() {
-        final BlockEntityArchetype build = new SpongeBlockEntityArchetypeBuilder()
+        return SpongeBlockEntityArchetypeBuilder.pooled()
             .blockEntity(this)
             .build();
-        return build;
     }
 
     @Override

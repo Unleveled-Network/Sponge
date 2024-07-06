@@ -29,45 +29,17 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.common.bridge.world.inventory.container.TrackedInventoryBridge;
 import org.spongepowered.common.event.inventory.InventoryEventFactory;
 
 @Mixin(ItemEntity.class)
 public abstract class ItemEntityMixin_Inventory {
 
-    @Shadow private int pickupDelay;
-
-    @Inject(
-        method = "playerTouch",
-        at = @At(
-            value = "INVOKE",
-            ordinal = 0,
-            target = "Lnet/minecraft/world/item/ItemStack;getItem()Lnet/minecraft/world/item/Item;"),
-        cancellable = true
-    )
-    private void spongeImpl$ThrowPickupEvent(final Player entityIn, final CallbackInfo ci) {
-        if (!InventoryEventFactory.callPlayerChangeInventoryPickupPreEvent(entityIn, (ItemEntity) (Object) this, this.pickupDelay)) {
-            ci.cancel();
-        }
-    }
-
     @Redirect(method = "playerTouch", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/entity/player/Inventory;add(Lnet/minecraft/world/item/ItemStack;)Z"))
-    private boolean spongeImpl$throwPikcupEventForAddItem(final Inventory inventory, final ItemStack itemStack, final Player player) {
-        final TrackedInventoryBridge inv = (TrackedInventoryBridge) inventory;
-        inv.bridge$setCaptureInventory(true);
-        final boolean added = inventory.add(itemStack);
-        inv.bridge$setCaptureInventory(false);
-        inv.bridge$getCapturedSlotTransactions();
-        if (!InventoryEventFactory.callPlayerChangeInventoryPickupEvent(player, inv)) {
-            return false;
-        }
-        return added;
+    private boolean spongeImpl$throwPickupEventForAddItem(final Inventory inventory, final ItemStack itemStack, final Player player) {
+        return InventoryEventFactory.callPlayerInventoryPickupEvent(player, (ItemEntity) (Object) this);
     }
 
 }

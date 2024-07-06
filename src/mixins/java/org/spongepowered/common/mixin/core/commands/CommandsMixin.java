@@ -32,6 +32,12 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.RootCommandNode;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.synchronization.SuggestionProviders;
+import net.minecraft.server.commands.AdvancementCommands;
+import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.api.command.CommandCause;
 import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.event.EventContextKeys;
@@ -43,7 +49,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.Slice;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.common.SpongeBootstrap;
 import org.spongepowered.common.bridge.commands.CommandSourceStackBridge;
 import org.spongepowered.common.bridge.commands.CommandsBridge;
 import org.spongepowered.common.bridge.commands.arguments.CompletionsArgumentTypeBridge;
@@ -59,16 +64,11 @@ import org.spongepowered.common.util.CommandUtil;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
-import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.Commands;
-import net.minecraft.commands.SharedSuggestionProvider;
-import net.minecraft.commands.synchronization.SuggestionProviders;
-import net.minecraft.server.commands.AdvancementCommands;
-import net.minecraft.server.level.ServerPlayer;
 
 @Mixin(Commands.class)
 public abstract class CommandsMixin implements CommandsBridge {
@@ -95,7 +95,8 @@ public abstract class CommandsMixin implements CommandsBridge {
             remap = false
     ))
     private CommandDispatcher<CommandSourceStack> impl$useSpongeDispatcher() {
-        final SpongeCommandManager manager = SpongeBootstrap.lifecycle().createCommandManager();
+        final SpongeCommandManager manager = Launch.instance().lifecycle().platformInjector().getInstance(SpongeCommandManager.class);
+        manager.init();
         this.impl$commandManager = manager;
         return new DelegatingCommandDispatcher(manager.getBrigadierRegistrar());
     }
@@ -121,7 +122,7 @@ public abstract class CommandsMixin implements CommandsBridge {
     @Redirect(method = "fillUsableCommands",
             slice = @Slice(
                     from = @At("HEAD"),
-                    to = @At(value = "INVOKE", target = "Ljava/util/Iterator;hasNext()Z")
+                    to = @At(value = "INVOKE", remap = false, target = "Ljava/util/Iterator;hasNext()Z")
             ),
             at = @At(value = "INVOKE", target = "Lcom/mojang/brigadier/tree/CommandNode;getChildren()Ljava/util/Collection;", remap = false))
     private Collection<CommandNode<CommandSourceStack>> impl$handleHiddenChildrenAndEnsureUnsortedLoop(final CommandNode<CommandSourceStack> commandNode) {
@@ -208,61 +209,63 @@ public abstract class CommandsMixin implements CommandsBridge {
             final CommandSourceStack sourceButTyped,
             final Map<CommandNode<CommandSourceStack>, CommandNode<SharedSuggestionProvider>> commandNodeToSuggestionNode
     ) {
-        if (SpongeNodePermissionCache.canUse(
-                rootCommandNode instanceof RootCommandNode, this.impl$commandManager.getDispatcher(), commandNode, sourceButTyped)) {
-
-            boolean shouldContinue = true;
-            if (commandNode instanceof SpongeArgumentCommandNode && ((SpongeArgumentCommandNode<?>) commandNode).isComplex()) {
-                shouldContinue = false;
-                final ServerPlayer e = (ServerPlayer) sourceButTyped.getEntity();
-                final boolean hasCustomSuggestionsAlready = CommandUtil.checkForCustomSuggestions(rootSuggestion);
-                final CommandNode<SharedSuggestionProvider> finalCommandNode = ((SpongeArgumentCommandNode<?>) commandNode).getComplexSuggestions(
-                        rootSuggestion,
-                        commandNodeToSuggestionNode,
-                        this.impl$playerNodeCache.get(e),
-                        !hasCustomSuggestionsAlready
-                );
-                if (!this.impl$getChildrenFromNode(commandNode).isEmpty()) {
-                    this.shadow$fillUsableCommands(commandNode, finalCommandNode, sourceButTyped, commandNodeToSuggestionNode);
-                }
-            }
-
-            if (shouldContinue) {
-                // If we've already created the node, then just attach what we already have.
-                final ServerPlayer e = (ServerPlayer) sourceButTyped.getEntity();
-                final List<CommandNode<SharedSuggestionProvider>> suggestionProviderCommandNode = this.impl$playerNodeCache.get(e).get(commandNode);
-                if (suggestionProviderCommandNode != null) {
-                    shouldContinue = false;
-                    boolean hasCustomSuggestionsAlready = CommandUtil.checkForCustomSuggestions(rootSuggestion);
-                    for (final CommandNode<SharedSuggestionProvider> node : suggestionProviderCommandNode) {
-                        // If we have custom suggestions, we need to limit it to one node, otherwise we trigger a bug
-                        // in the client where it'll send more than one custom suggestion request - which is fine, except
-                        // the client will then ignore all but one of them. This is a problem because we then end up with
-                        // no suggestions - CompletableFuture.allOf(...) will contain an exception if a future is cancelled,
-                        // meaning thenRun(...) does not run, which is how displaying the suggestions works...
-                        //
-                        // Because we don't control the client, we have to work around it here.
-                        if (hasCustomSuggestionsAlready && node instanceof ArgumentCommandNode) {
-                            final ArgumentCommandNode<SharedSuggestionProvider, ?> argNode = (ArgumentCommandNode<SharedSuggestionProvider, ?>) node;
-                            if (argNode.getCustomSuggestions() != null) {
-                                // Rebuild the node without the custom suggestions.
-                                rootSuggestion.addChild(this.impl$cloneArgumentCommandNodeWithoutSuggestions(argNode));
-                                continue;
-                            }
-                        } else if (node instanceof ArgumentCommandNode && ((ArgumentCommandNode<?, ?>) node).getCustomSuggestions() != null) {
-                            hasCustomSuggestionsAlready = true; // no more custom suggestions
+        final ServerPlayer e = (ServerPlayer) sourceButTyped.getEntity();
+        final Map<CommandNode<CommandSourceStack>, List<CommandNode<SharedSuggestionProvider>>> playerNodes = this.impl$playerNodeCache.get(e);
+        final List<CommandNode<SharedSuggestionProvider>> existingNodes = playerNodes.get(commandNode);
+        if (existingNodes != null) {
+            if (!existingNodes.isEmpty()) {
+                boolean hasCustomSuggestionsAlready = CommandUtil.checkForCustomSuggestions(rootSuggestion);
+                for (final CommandNode<SharedSuggestionProvider> node : existingNodes) {
+                    // If we have custom suggestions, we need to limit it to one node, otherwise we trigger a bug
+                    // in the client where it'll send more than one custom suggestion request - which is fine, except
+                    // the client will then ignore all but one of them. This is a problem because we then end up with
+                    // no suggestions - CompletableFuture.allOf(...) will contain an exception if a future is cancelled,
+                    // meaning thenRun(...) does not run, which is how displaying the suggestions works...
+                    //
+                    // Because we don't control the client, we have to work around it here.
+                    if (hasCustomSuggestionsAlready && node instanceof ArgumentCommandNode) {
+                        final ArgumentCommandNode<SharedSuggestionProvider, ?> argNode = (ArgumentCommandNode<SharedSuggestionProvider, ?>) node;
+                        if (argNode.getCustomSuggestions() != null) {
+                            // Rebuild the node without the custom suggestions.
+                            rootSuggestion.addChild(this.impl$cloneArgumentCommandNodeWithoutSuggestions(argNode));
+                            continue;
                         }
-                        rootSuggestion.addChild(node);
+                    } else if (node instanceof ArgumentCommandNode && ((ArgumentCommandNode<?, ?>) node).getCustomSuggestions() != null) {
+                        hasCustomSuggestionsAlready = true; // no more custom suggestions
                     }
+                    rootSuggestion.addChild(node);
                 }
             }
-            return shouldContinue;
+            // If empty, we have a node won't resolve (even if not complex), so we ignore it.
+            return false;
+        // If we have already processed this node and it appears in the suggestion node list, prevent a potentially costly
+        // canUse check as we know we can already use it.
+        } else if (!commandNodeToSuggestionNode.containsKey(commandNode) && !SpongeNodePermissionCache.canUse(
+                rootCommandNode instanceof RootCommandNode, this.impl$commandManager.getDispatcher(), commandNode, sourceButTyped)) {
+            playerNodes.put(commandNode, Collections.emptyList());
+            return false;
         }
-        return false;
+
+        if (commandNode instanceof SpongeArgumentCommandNode && ((SpongeArgumentCommandNode<?>) commandNode).isComplex()) {
+            final boolean hasCustomSuggestionsAlready = CommandUtil.checkForCustomSuggestions(rootSuggestion);
+            final CommandNode<SharedSuggestionProvider> finalCommandNode = ((SpongeArgumentCommandNode<?>) commandNode).getComplexSuggestions(
+                    rootSuggestion,
+                    commandNodeToSuggestionNode,
+                    playerNodes,
+                    !hasCustomSuggestionsAlready
+            );
+            if (!this.impl$getChildrenFromNode(commandNode).isEmpty()) {
+                this.shadow$fillUsableCommands(commandNode, finalCommandNode, sourceButTyped, commandNodeToSuggestionNode);
+            }
+            return false;
+        }
+
+        // Normal node, handle it normally. We don't add to the playerNodeCache - the commandNodeToSuggestionNode map handles this.
+        return true;
     }
 
     @Redirect(method = "fillUsableCommands", at = @At(value = "INVOKE",
-            target = "Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;suggests(Lcom/mojang/brigadier/suggestion/SuggestionProvider;)Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;"), remap = false)
+            target = "Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;suggests(Lcom/mojang/brigadier/suggestion/SuggestionProvider;)Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;", remap = false))
     private RequiredArgumentBuilder<SharedSuggestionProvider, ?> impl$dontAskServerIfSiblingAlreadyDoes(
             final RequiredArgumentBuilder<SharedSuggestionProvider, ?> requiredArgumentBuilder,
             final SuggestionProvider<SharedSuggestionProvider> provider,
@@ -295,6 +298,7 @@ public abstract class CommandsMixin implements CommandsBridge {
             final Map<CommandNode<CommandSourceStack>, CommandNode<SharedSuggestionProvider>> p_197052_4_,
             final ServerPlayer playerEntity) {
         try (final CauseStackManager.StackFrame frame = PhaseTracker.getCauseStackManager().pushCauseFrame()) {
+            frame.pushCause(playerEntity);
             frame.addContext(EventContextKeys.SUBJECT, (Subject) playerEntity);
             final CommandCause sourceToUse = ((CommandSourceStackBridge) p_197052_3_).bridge$withCurrentCause();
             try {

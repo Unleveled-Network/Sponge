@@ -78,7 +78,7 @@ public abstract class AbstractRegisterRegistryEvent extends AbstractLifecycleEve
 
         @Override
         protected SpongeRegistryHolder getHolder() {
-            return (SpongeRegistryHolder) this.game.registries();
+            return (SpongeRegistryHolder) this.game;
         }
     }
 
@@ -101,7 +101,7 @@ public abstract class AbstractRegisterRegistryEvent extends AbstractLifecycleEve
 
         @Override
         protected SpongeRegistryHolder getHolder() {
-            return (SpongeRegistryHolder) this.engine.registries();
+            return (SpongeRegistryHolder) this.engine;
         }
     }
 
@@ -121,7 +121,7 @@ public abstract class AbstractRegisterRegistryEvent extends AbstractLifecycleEve
 
         @Override
         protected SpongeRegistryHolder getHolder() {
-            return (SpongeRegistryHolder) this.game.server().worldManager().world(this.worldKey).get().registries();
+            return (SpongeRegistryHolder) this.game.server().worldManager().world(this.worldKey).get();
         }
     }
 }

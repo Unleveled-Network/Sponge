@@ -24,9 +24,9 @@
  */
 package org.spongepowered.common.applaunch.config.common;
 
+import org.spongepowered.configurate.objectmapping.ConfigSerializable;
 import org.spongepowered.configurate.objectmapping.meta.Comment;
 import org.spongepowered.configurate.objectmapping.meta.Setting;
-import org.spongepowered.configurate.objectmapping.ConfigSerializable;
 
 @ConfigSerializable
 public final class ModuleCategory {
@@ -46,9 +46,6 @@ public final class ModuleCategory {
 
     @Setting("entity-collision")
     public boolean entityCollision = true;
-
-    @Setting
-    public boolean timings = true;
 
     @Setting
     @Comment("Controls whether any exploit patches are applied.\n"

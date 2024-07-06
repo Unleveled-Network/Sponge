@@ -24,19 +24,30 @@
  */
 package org.spongepowered.common.mixin.api.minecraft.world.entity.player;
 
+import com.mojang.authlib.GameProfile;
+import net.kyori.adventure.identity.Identified;
+import net.kyori.adventure.identity.Identity;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Abilities;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemCooldowns;
+import org.spongepowered.api.data.Keys;
+import org.spongepowered.api.data.value.Value;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Implements;
+import org.spongepowered.asm.mixin.Interface;
+import org.spongepowered.asm.mixin.Interface.Remap;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.common.bridge.world.entity.PlatformEntityBridge;
 import org.spongepowered.common.mixin.api.minecraft.world.entity.LivingEntityMixin_API;
 
+import java.util.Set;
+
 @Mixin(net.minecraft.world.entity.player.Player.class)
+@Implements(@Interface(iface=Identified.class, prefix = "identified$", remap = Remap.NONE))
 public abstract class PlayerMixin_API extends LivingEntityMixin_API implements Player {
 
     // @formatter:off
@@ -44,8 +55,10 @@ public abstract class PlayerMixin_API extends LivingEntityMixin_API implements P
     @Shadow @Final public Abilities abilities;
     @Shadow @Final public Inventory inventory;
     @Shadow public abstract ItemCooldowns shadow$getCooldowns();
+    @Override
     @Shadow public abstract Component shadow$getDisplayName();
     @Shadow public abstract Component shadow$getName();
+    @Shadow public abstract GameProfile shadow$getGameProfile();
     // @formatter:on
 
     public final boolean impl$isFake = ((PlatformEntityBridge) this).bridge$isFakePlayer();
@@ -55,4 +68,37 @@ public abstract class PlayerMixin_API extends LivingEntityMixin_API implements P
         return this.shadow$getName().getString();
     }
 
+    @Override
+    protected Set<Value.Immutable<?>> api$getVanillaValues() {
+        final Set<Value.Immutable<?>> values = super.api$getVanillaValues();
+
+        values.add(this.requireValue(Keys.AFFECTS_SPAWNING).asImmutable());
+        values.add(this.requireValue(Keys.CAN_FLY).asImmutable());
+        values.add(this.requireValue(Keys.DOMINANT_HAND).asImmutable());
+        values.add(this.requireValue(Keys.EXHAUSTION).asImmutable());
+        values.add(this.requireValue(Keys.EXPERIENCE).asImmutable());
+        values.add(this.requireValue(Keys.EXPERIENCE_FROM_START_OF_LEVEL).asImmutable());
+        values.add(this.requireValue(Keys.EXPERIENCE_LEVEL).asImmutable());
+        values.add(this.requireValue(Keys.EXPERIENCE_SINCE_LEVEL).asImmutable());
+        values.add(this.requireValue(Keys.FLYING_SPEED).asImmutable());
+        values.add(this.requireValue(Keys.FOOD_LEVEL).asImmutable());
+        values.add(this.requireValue(Keys.IS_FLYING).asImmutable());
+        values.add(this.requireValue(Keys.IS_SLEEPING).asImmutable());
+        values.add(this.requireValue(Keys.IS_SLEEPING_IGNORED).asImmutable());
+        values.add(this.requireValue(Keys.MAX_EXHAUSTION).asImmutable());
+        values.add(this.requireValue(Keys.MAX_FOOD_LEVEL).asImmutable());
+        values.add(this.requireValue(Keys.MAX_SATURATION).asImmutable());
+        values.add(this.requireValue(Keys.SATURATION).asImmutable());
+        values.add(this.requireValue(Keys.SLEEP_TIMER).asImmutable());
+        values.add(this.requireValue(Keys.WALKING_SPEED).asImmutable());
+
+        this.getValue(Keys.FIRST_DATE_JOINED).map(Value::asImmutable).ifPresent(values::add);
+        this.getValue(Keys.LAST_DATE_PLAYED).map(Value::asImmutable).ifPresent(values::add);
+
+        return values;
+    }
+
+    public Identity identified$identity() {
+        return this.profile();
+    }
 }

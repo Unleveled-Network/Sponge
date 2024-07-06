@@ -24,23 +24,27 @@
  */
 package org.spongepowered.common.event.tracking.phase.block;
 
-import org.spongepowered.common.event.tracking.PhaseTracker;
+import org.spongepowered.api.ResourceKey;
+import org.spongepowered.api.block.BlockSnapshot;
 import org.spongepowered.common.event.tracking.TrackingUtil;
 import org.spongepowered.common.event.tracking.context.GeneralizedContext;
 
-final class DispensePhaseState extends BlockPhaseState {
+import java.util.Optional;
+import java.util.function.Supplier;
 
-    @Override
-    public GeneralizedContext createNewContext(final PhaseTracker tracker) {
-        return super.createNewContext(tracker)
-            .addBlockCaptures()
-            .addEntityCaptures()
-            .addEntityDropCaptures();
-    }
+final class DispensePhaseState extends BlockPhaseState {
 
     @Override
     public void unwind(final GeneralizedContext phaseContext) {
         TrackingUtil.processBlockCaptures(phaseContext);
     }
 
+    @Override
+    public Supplier<ResourceKey> attemptWorldKey(GeneralizedContext context) {
+        final Optional<BlockSnapshot> source = context.getSource(BlockSnapshot.class);
+        if (source.isPresent()) {
+            return () -> source.get().world();
+        }
+        return super.attemptWorldKey(context);
+    }
 }

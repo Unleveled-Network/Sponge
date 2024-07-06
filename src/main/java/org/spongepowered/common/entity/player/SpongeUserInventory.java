@@ -24,8 +24,6 @@
  */
 package org.spongepowered.common.entity.player;
 
-import java.util.Arrays;
-import java.util.List;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -34,6 +32,9 @@ import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+
+import java.util.Arrays;
+import java.util.List;
 
 public class SpongeUserInventory implements Container {
 
@@ -48,12 +49,12 @@ public class SpongeUserInventory implements Container {
     /** The index of the currently held item (0-8). */
     public int currentItem;
     /** The player whose inventory this is. */
-    public SpongeUser user;
+    private final SpongeUserData userData;
     private boolean dirty = false;
 
-    public SpongeUserInventory(final SpongeUser user) {
+    public SpongeUserInventory(final SpongeUserData userData) {
         this.allInventories = Arrays.asList(this.mainInventory, this.armorInventory, this.offHandInventory);
-        this.user = user;
+        this.userData = userData;
     }
 
     public ItemStack getCurrentItem() {
@@ -247,7 +248,7 @@ public class SpongeUserInventory implements Container {
     @Override
     public void setChanged() {
         this.dirty = true;
-        this.user.markDirty();
+        this.userData.markDirty();
     }
 
     /**

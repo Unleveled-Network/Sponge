@@ -24,6 +24,9 @@
  */
 package org.spongepowered.common.mixin.api.minecraft.world.level;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.api.block.entity.BlockEntity;
 import org.spongepowered.api.fluid.FluidState;
 import org.spongepowered.api.world.volume.game.PrimitiveGameVolume;
@@ -31,13 +34,11 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.math.vector.Vector3i;
 
-import javax.annotation.Nullable;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.block.state.BlockState;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Optional;
+
+import javax.annotation.Nullable;
 
 @Mixin(BlockGetter.class)
 public interface BlockGetterMixin_API extends PrimitiveGameVolume {
@@ -93,31 +94,26 @@ public interface BlockGetterMixin_API extends PrimitiveGameVolume {
 
     @Override
     default int highestYAt(final int x, final int z) {
-        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of IBlockReader that isn't part of Sponge API");
+        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of BlockGetter that isn't part of Sponge API");
     }
 
     @Override
-    default Vector3i blockMin() {
-        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of IBlockReader that isn't part of Sponge API");
+    default Vector3i min() {
+        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of BlockGetter that isn't part of Sponge API");
     }
 
     @Override
-    default Vector3i blockMax() {
-        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of IBlockReader that isn't part of Sponge API");
+    default Vector3i max() {
+        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of BlockGetter that isn't part of Sponge API");
     }
 
     @Override
-    default Vector3i blockSize() {
-        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of IBlockReader that isn't part of Sponge API");
-    }
-
-    @Override
-    default boolean containsBlock(final int x, final int y, final int z) {
-        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of IBlockReader that isn't part of Sponge API");
+    default boolean contains(final int x, final int y, final int z) {
+        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of BlockGetter that isn't part of Sponge API");
     }
 
     @Override
     default boolean isAreaAvailable(final int x, final int y, final int z) {
-        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of IBlockReader that isn't part of Sponge API");
+        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of BlockGetter that isn't part of Sponge API");
     }
 }

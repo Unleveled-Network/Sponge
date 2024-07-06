@@ -30,6 +30,7 @@ import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.decoration.HangingEntity;
 import net.minecraft.world.entity.decoration.Motive;
 import net.minecraft.world.entity.decoration.Painting;
 import net.minecraft.world.entity.item.FallingBlockEntity;
@@ -43,22 +44,33 @@ import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.storage.LevelData;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.ResourceKey;
+import org.spongepowered.api.block.entity.BlockEntity;
 import org.spongepowered.api.data.Keys;
+import org.spongepowered.api.data.persistence.DataContainer;
+import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.EntityType;
 import org.spongepowered.api.entity.projectile.EnderPearl;
+import org.spongepowered.api.registry.RegistryTypes;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.common.accessor.world.entity.MobAccessor;
-import org.spongepowered.common.bridge.world.WorldBridge;
-import org.spongepowered.common.bridge.world.level.PlatformLevelBridge;
+import org.spongepowered.common.bridge.world.level.LevelBridge;
+import org.spongepowered.common.data.persistence.NBTTranslator;
 import org.spongepowered.common.entity.projectile.UnknownProjectileSource;
+import org.spongepowered.common.util.Constants;
+import org.spongepowered.common.util.DataUtil;
 import org.spongepowered.math.vector.Vector3d;
 
+import java.util.List;
+import java.util.function.Predicate;
+
 @Mixin(net.minecraft.world.level.Level.class)
-public abstract class LevelMixin implements WorldBridge, PlatformLevelBridge, LevelAccessor {
+public abstract class LevelMixin implements LevelBridge, LevelAccessor {
 
     // @formatter: off
     @Mutable @Shadow @Final private DimensionType dimensionType;
@@ -66,6 +78,8 @@ public abstract class LevelMixin implements WorldBridge, PlatformLevelBridge, Le
     @Shadow protected float rainLevel;
     @Shadow protected float oThunderLevel;
     @Shadow protected float thunderLevel;
+    @Shadow @Final public List<BlockEntity> blockEntityList;
+    @Shadow @Final public List<BlockEntity> tickableBlockEntities;
 
     @Shadow public abstract LevelData shadow$getLevelData();
     @Shadow public abstract void shadow$updateSkyBrightness();
@@ -74,6 +88,7 @@ public abstract class LevelMixin implements WorldBridge, PlatformLevelBridge, Le
     @Shadow public abstract LevelChunk shadow$getChunkAt(BlockPos p_175726_1_);
     @Shadow public abstract DifficultyInstance shadow$getCurrentDifficultyAt(BlockPos p_175649_1_);
     @Shadow public abstract boolean shadow$isRaining();
+    @Shadow @javax.annotation.Nullable public abstract net.minecraft.world.level.block.entity.BlockEntity shadow$getBlockEntity(BlockPos p_175625_1_);
     @Shadow public abstract WorldBorder shadow$getWorldBorder();
     // @formatter on
 
@@ -87,6 +102,63 @@ public abstract class LevelMixin implements WorldBridge, PlatformLevelBridge, Le
         this.dimensionType = dimensionType;
 
         // TODO Minecraft 1.16.4 - Re-create the WorldBorder due to new coordinate scale, send that updated packet to players
+    }
+
+    @SuppressWarnings("unchecked")
+    public <E extends org.spongepowered.api.entity.Entity> E bridge$createEntity(
+            final DataContainer dataContainer,
+            final @Nullable Vector3d position,
+            final @Nullable Predicate<Vector3d> positionCheck) throws IllegalArgumentException, IllegalStateException {
+
+        final EntityType<@NonNull ?> type = dataContainer.getRegistryValue(Constants.Entity.TYPE, RegistryTypes.ENTITY_TYPE)
+                .orElseThrow(() -> new IllegalArgumentException("DataContainer does not contain a valid entity type."));
+        final Vector3d proposedPosition;
+        if (position == null) {
+            proposedPosition = DataUtil.getPosition3d(dataContainer, Constants.Sponge.SNAPSHOT_WORLD_POSITION);
+        } else {
+            proposedPosition = position;
+        }
+
+        if (positionCheck != null && !positionCheck.test(proposedPosition)) {
+            throw new IllegalArgumentException(String.format("Position (%.2f, %.2f, %.2f) is not a valid position in this context.",
+                    proposedPosition.x(),
+                    proposedPosition.y(),
+                    proposedPosition.z()));
+        }
+
+        final @Nullable Vector3d rotation;
+        if (dataContainer.contains(Constants.Entity.ROTATION)) {
+            rotation = DataUtil.getPosition3d(dataContainer, Constants.Entity.ROTATION);
+        } else {
+            rotation = null;
+        }
+
+        final @Nullable Vector3d scale;
+        if (dataContainer.contains(Constants.Entity.SCALE)) {
+            scale = DataUtil.getPosition3d(dataContainer, Constants.Entity.SCALE);
+        } else {
+            scale = null;
+        }
+
+        final Entity createdEntity = this.bridge$createEntity(type, position, false);
+        dataContainer.getView(Constants.Sponge.UNSAFE_NBT)
+                .map(NBTTranslator.INSTANCE::translate)
+                .ifPresent(x -> {
+                    final net.minecraft.world.entity.Entity e = ((net.minecraft.world.entity.Entity) createdEntity);
+                    // mimicing Entity#restoreFrom
+                    x.remove("Dimension");
+                    e.load(x);
+                    // position needs a reset
+                    e.moveTo(proposedPosition.x(), proposedPosition.y(), proposedPosition.z());
+                });
+        if (rotation != null) {
+            createdEntity.setRotation(rotation);
+        }
+        if (scale != null) {
+            createdEntity.setScale(scale);
+        }
+
+        return (E) createdEntity;
     }
 
     @Override
@@ -135,17 +207,12 @@ public abstract class LevelMixin implements WorldBridge, PlatformLevelBridge, Le
         }
 
         // TODO - replace this with an actual check
-        /*
-        if (entity instanceof EntityHanging) {
-            if (((EntityHanging) entity).facingDirection == null) {
-                // TODO Some sort of detection of a valid direction?
-                // i.e scan immediate blocks for something to attach onto.
-                ((EntityHanging) entity).facingDirection = EnumFacing.NORTH;
+
+        if (entity instanceof HangingEntity) {
+            if (!((HangingEntity) entity).survives()) {
+                throw new IllegalArgumentException("Hanging entity does not survive at the given position: " + position);
             }
-            if (!((EntityHanging) entity).onValidSurface()) {
-                return Optional.empty();
-            }
-        }*/
+        }
 
         if (naturally && entity instanceof Mob) {
             // Adding the default equipment

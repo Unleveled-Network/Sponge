@@ -30,6 +30,7 @@ import static org.objectweb.asm.Opcodes.ARETURN;
 import static org.objectweb.asm.Opcodes.CHECKCAST;
 import static org.objectweb.asm.Opcodes.IFEQ;
 import static org.objectweb.asm.Opcodes.IFNE;
+import static org.objectweb.asm.Opcodes.INSTANCEOF;
 import static org.objectweb.asm.Opcodes.INVOKEINTERFACE;
 
 import org.objectweb.asm.ClassWriter;
@@ -37,38 +38,66 @@ import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 import org.spongepowered.api.event.Cancellable;
+import org.spongepowered.api.event.filter.IsCancelled;
 import org.spongepowered.api.util.Tristate;
-
-import java.lang.reflect.Method;
+import org.spongepowered.common.event.manager.ListenerClassVisitor;
 
 public class CancellationEventFilterDelegate implements FilterDelegate {
 
     private final Tristate state;
 
-    public CancellationEventFilterDelegate(Tristate state) {
+    public CancellationEventFilterDelegate(final IsCancelled state) {
+        this(state.value());
+    }
+
+    public CancellationEventFilterDelegate(final Tristate state) {
         this.state = state;
     }
 
     @Override
-    public int write(String name, ClassWriter cw, MethodVisitor mv, Method method, int locals) {
+    public int write(final String name, final ClassWriter cw, final MethodVisitor mv,
+        final ListenerClassVisitor.DiscoveredMethod method, final int locals
+    ) throws ClassNotFoundException {
         if (this.state == Tristate.UNDEFINED) {
             return locals;
         }
-        if (!Cancellable.class.isAssignableFrom(method.getParameters()[0].getType())) {
-            throw new IllegalStateException("Attempted to filter a non-cancellable event type by its cancellation status");
+
+        final boolean checkCancellable = !Cancellable.class.isAssignableFrom(method.parameterTypes()[0].clazz());
+        final String cancellableClassName = Type.getInternalName(Cancellable.class);
+        final Label notCancelled = new Label();
+
+        if (checkCancellable) {
+            mv.visitVarInsn(ALOAD, 1);
+            mv.visitTypeInsn(INSTANCEOF, cancellableClassName);
+            mv.visitJumpInsn(IFEQ, notCancelled);
         }
+
         mv.visitVarInsn(ALOAD, 1);
-        mv.visitTypeInsn(CHECKCAST, Type.getInternalName(Cancellable.class));
-        mv.visitMethodInsn(INVOKEINTERFACE, Type.getInternalName(Cancellable.class), "isCancelled", "()Z", true);
-        Label success = new Label();
-        if (this.state == Tristate.TRUE) {
-            mv.visitJumpInsn(IFNE, success);
-        } else {
-            mv.visitJumpInsn(IFEQ, success);
+        if (checkCancellable) {
+            mv.visitTypeInsn(CHECKCAST, cancellableClassName);
         }
-        mv.visitInsn(ACONST_NULL);
-        mv.visitInsn(ARETURN);
-        mv.visitLabel(success);
+        mv.visitMethodInsn(INVOKEINTERFACE, cancellableClassName, "isCancelled", "()Z", true);
+
+        if (this.state == Tristate.TRUE) {
+            final Label cancelled = new Label();
+            mv.visitJumpInsn(IFNE, cancelled);
+
+            if (checkCancellable) {
+                mv.visitLabel(notCancelled);
+            }
+            mv.visitInsn(ACONST_NULL);
+            mv.visitInsn(ARETURN);
+
+            mv.visitLabel(cancelled);
+        } else {
+            mv.visitJumpInsn(IFEQ, notCancelled);
+
+            mv.visitInsn(ACONST_NULL);
+            mv.visitInsn(ARETURN);
+
+            mv.visitLabel(notCancelled);
+        }
+
         return locals;
     }
 

@@ -24,6 +24,7 @@
  */
 package org.spongepowered.common.mixin.api.minecraft.block;
 
+import com.google.common.collect.ImmutableList;
 import net.kyori.adventure.text.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -32,11 +33,16 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.block.BlockType;
 import org.spongepowered.api.item.ItemType;
+import org.spongepowered.api.registry.RegistryTypes;
 import org.spongepowered.api.state.StateProperty;
+import org.spongepowered.api.tag.Tag;
+import org.spongepowered.api.tag.TagType;
+import org.spongepowered.api.tag.TagTypes;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.common.data.holder.SpongeImmutableDataHolder;
+import org.spongepowered.common.util.TagUtil;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -48,10 +54,14 @@ public abstract class BlockMixin_API extends AbstractBlockMixin_API implements S
 
     // @formatter:off
     @Shadow @Final protected StateDefinition<Block, net.minecraft.world.level.block.state.BlockState> stateDefinition;
-    @Shadow public abstract Item shadow$asItem();
     @Shadow public abstract String shadow$getDescriptionId();
     @Shadow public abstract net.minecraft.world.level.block.state.BlockState shadow$defaultBlockState();
     // @formatter:on
+
+    @Override
+    public ImmutableList<BlockState> validStates() {
+        return (ImmutableList) this.stateDefinition.getPossibleStates();
+    }
 
     @Override
     public BlockState defaultState() {
@@ -91,5 +101,15 @@ public abstract class BlockMixin_API extends AbstractBlockMixin_API implements S
     @Override
     public boolean isAnyOf(final BlockType... types) {
         return Arrays.stream(types).anyMatch(type -> type == this);
+    }
+
+    @Override
+    public TagType<BlockType> tagType() {
+        return TagTypes.BLOCK_TYPE.get();
+    }
+
+    @Override
+    public Collection<Tag<BlockType>> tags() {
+        return TagUtil.getAssociatedTags(this, RegistryTypes.BLOCK_TYPE_TAGS);
     }
 }

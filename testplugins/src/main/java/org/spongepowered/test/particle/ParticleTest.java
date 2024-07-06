@@ -26,11 +26,14 @@ package org.spongepowered.test.particle;
 
 import com.google.inject.Inject;
 import io.leangen.geantyref.TypeToken;
+import net.kyori.adventure.text.Component;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockTypes;
 import org.spongepowered.api.command.Command;
 import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.parameter.Parameter;
+import org.spongepowered.api.data.persistence.DataContainer;
+import org.spongepowered.api.data.persistence.DataFormats;
 import org.spongepowered.api.effect.particle.ParticleEffect;
 import org.spongepowered.api.effect.particle.ParticleOptions;
 import org.spongepowered.api.effect.particle.ParticleType;
@@ -45,7 +48,11 @@ import org.spongepowered.api.util.Color;
 import org.spongepowered.api.util.Direction;
 import org.spongepowered.math.vector.Vector3d;
 import org.spongepowered.plugin.PluginContainer;
-import org.spongepowered.plugin.jvm.Plugin;
+import org.spongepowered.plugin.builtin.jvm.Plugin;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 
 @Plugin("particletest")
 public final class ParticleTest {
@@ -61,7 +68,7 @@ public final class ParticleTest {
     public void onRegisterSpongeCommand(final RegisterCommandEvent<Command.Parameterized> event) {
         final Parameter.Value<ParticleType> particleType =
                 Parameter.registryElement(TypeToken.get(ParticleType.class),
-                        (ctx) -> Sponge.game().registries(),
+                        (ctx) -> Sponge.game(),
                         RegistryTypes.PARTICLE_TYPE,
                         "minecraft",
                         "sponge")
@@ -89,6 +96,19 @@ public final class ParticleTest {
                 .velocity(Vector3d.RIGHT.mul(0.5))
                 .quantity(20)
                 .build();
+
+        try {
+            final DataContainer dataContainer = effect.toContainer();
+            final ByteArrayOutputStream serialized = new ByteArrayOutputStream();
+            DataFormats.NBT.get().writeTo(serialized, dataContainer);
+            final DataContainer deserialized = DataFormats.NBT.get().readFrom(new ByteArrayInputStream(serialized.toByteArray()));
+            if (ParticleEffect.builder().build(deserialized).isPresent()) {
+                serverPlayer.sendMessage(Component.text("Successfully serialized and rebuilt ParticleEffect"));
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+
         serverPlayer.spawnParticles(effect, serverPlayer.position().add(-2, 1, -2));
     }
 }

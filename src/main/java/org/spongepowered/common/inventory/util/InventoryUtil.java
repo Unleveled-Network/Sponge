@@ -24,6 +24,12 @@
  */
 package org.spongepowered.common.inventory.util;
 
+import net.minecraft.world.CompoundContainer;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.inventory.CraftingContainer;
+import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.state.properties.ChestType;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
@@ -38,22 +44,17 @@ import org.spongepowered.api.item.inventory.type.CarriedInventory;
 import org.spongepowered.api.registry.RegistryTypes;
 import org.spongepowered.common.SpongeCommon;
 import org.spongepowered.common.bridge.world.inventory.container.TrackedInventoryBridge;
-import org.spongepowered.common.entity.player.SpongeUser;
+import org.spongepowered.common.entity.player.SpongeUserData;
 import org.spongepowered.common.hooks.PlatformHooks;
 import org.spongepowered.common.inventory.adapter.InventoryAdapter;
+import org.spongepowered.common.inventory.adapter.impl.BasicInventoryAdapter;
 import org.spongepowered.common.inventory.custom.CarriedWrapperInventory;
 import org.spongepowered.common.inventory.custom.CustomInventory;
+import org.spongepowered.common.inventory.fabric.Fabric;
 import org.spongepowered.common.launch.Launch;
 import org.spongepowered.plugin.PluginContainer;
 
 import java.util.Optional;
-
-import net.minecraft.world.CompoundContainer;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.inventory.CraftingContainer;
-import net.minecraft.world.level.block.ChestBlock;
-import net.minecraft.world.level.block.entity.ChestBlockEntity;
-import net.minecraft.world.level.block.state.properties.ChestType;
 
 public final class InventoryUtil {
 
@@ -120,6 +121,9 @@ public final class InventoryUtil {
         if (inventory instanceof InventoryAdapter) {
             return ((InventoryAdapter) inventory);
         }
+        if (inventory instanceof Fabric) {
+            return new BasicInventoryAdapter((Fabric) inventory, null, null);
+        }
         return PlatformHooks.INSTANCE.getInventoryHooks().findInventoryAdapter(inventory);
     }
 
@@ -148,7 +152,7 @@ public final class InventoryUtil {
         final Object base = inventory;
 
         if (base instanceof BlockEntity) {
-            final ResourceKey key = Sponge.game().registries().registry(RegistryTypes.BLOCK_ENTITY_TYPE).valueKey(((BlockEntity) base).type());
+            final ResourceKey key = Sponge.game().registry(RegistryTypes.BLOCK_ENTITY_TYPE).valueKey(((BlockEntity) base).type());
             final String pluginId = key.namespace();
             container = Sponge.pluginManager().plugin(pluginId)
                     .orElseThrow(() -> new AssertionError("Missing plugin " + pluginId + " for block " + key.namespace() + ":" + key.value()));
@@ -159,7 +163,7 @@ public final class InventoryUtil {
                 SpongeCommon.logger().debug("Unknown plugin for [{}]", base);
                 return Launch.instance().minecraftPlugin();
             });
-        } else if (base instanceof SpongeUser) {
+        } else if (base instanceof SpongeUserData) {
             container = Launch.instance().minecraftPlugin();
         } else {
             container = Sponge.pluginManager().plugin(PlatformHooks.INSTANCE

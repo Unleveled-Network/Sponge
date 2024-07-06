@@ -39,7 +39,7 @@ import org.spongepowered.common.applaunch.config.common.CommonConfig;
 import org.spongepowered.common.applaunch.config.core.ConfigHandle;
 import org.spongepowered.common.applaunch.config.core.SpongeConfigs;
 import org.spongepowered.common.bridge.entitycollision.CollisionCapabilityBridge;
-import org.spongepowered.common.bridge.world.WorldBridge;
+import org.spongepowered.common.bridge.world.level.LevelBridge;
 import org.spongepowered.common.bridge.world.level.storage.PrimaryLevelDataBridge;
 import org.spongepowered.common.config.inheritable.EntityCollisionCategory;
 import org.spongepowered.common.config.inheritable.InheritableConfigHandle;
@@ -56,16 +56,15 @@ public abstract class EntityMixin_EntityCollision implements CollisionCapability
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void collisions$InjectActivationInformation(net.minecraft.world.entity.EntityType<?> type, net.minecraft.world.level.Level world, CallbackInfo ci) {
-        if (world != null && !((WorldBridge) world).bridge$isFake() && ((PrimaryLevelDataBridge) world.getLevelData()).bridge$valid()) {
+        if (world != null && !((LevelBridge) world).bridge$isFake() && ((PrimaryLevelDataBridge) world.getLevelData()).bridge$valid()) {
             if ((net.minecraft.world.entity.Entity) (Object) this instanceof ItemEntity) {
                 final ItemEntity item = (ItemEntity) (Object) this;
                 final ItemStack itemstack = item.getItem();
                 if (!itemstack.isEmpty()) {
-                    this.entityCollision$key =
-                            Sponge.game().registries().registry(RegistryTypes.ITEM_TYPE).valueKey(((org.spongepowered.api.item.inventory.ItemStack) (Object) itemstack).type());
+                    this.entityCollision$key = Sponge.game().registry(RegistryTypes.ITEM_TYPE).valueKey(((org.spongepowered.api.item.inventory.ItemStack) (Object) itemstack).type());
                 }
             } else {
-                this.entityCollision$key = Sponge.game().registries().registry(RegistryTypes.ENTITY_TYPE).valueKey(((Entity) this).type());
+                this.entityCollision$key = Sponge.game().registry(RegistryTypes.ENTITY_TYPE).valueKey(((Entity) this).type());
             }
             if (!this.shadow$getCommandSenderWorld().isClientSide()) {
                 this.collision$initializeCollisionState(this.shadow$getCommandSenderWorld());

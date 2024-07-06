@@ -27,14 +27,15 @@ package org.spongepowered.vanilla.applaunch.plugin;
 import org.apache.logging.log4j.Logger;
 import org.spongepowered.common.applaunch.plugin.PluginPlatform;
 import org.spongepowered.plugin.PluginCandidate;
-import org.spongepowered.plugin.PluginEnvironment;
-import org.spongepowered.plugin.PluginKeys;
 import org.spongepowered.plugin.PluginLanguageService;
 import org.spongepowered.plugin.PluginResource;
 import org.spongepowered.plugin.PluginResourceLocatorService;
+import org.spongepowered.plugin.blackboard.Key;
+import org.spongepowered.plugin.blackboard.Keys;
+import org.spongepowered.plugin.builtin.StandardEnvironment;
+import org.spongepowered.plugin.builtin.jvm.JVMKeys;
 
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -48,15 +49,17 @@ import java.util.Set;
 
 public final class VanillaPluginPlatform implements PluginPlatform {
 
-    private final PluginEnvironment pluginEnvironment;
+    public static final Key<List<Path>> EXTRA_TRANSFORMABLE_PATHS = Key.of("spongevanilla:transformable_paths", List.class);
+
+    private final StandardEnvironment standardEnvironment;
     private final Map<String, PluginResourceLocatorService<PluginResource>> locatorServices;
     private final Map<String, PluginLanguageService<PluginResource>> languageServices;
 
     private final Map<String, Set<PluginResource>> locatorResources;
     private final Map<PluginLanguageService<PluginResource>, List<PluginCandidate<PluginResource>>> pluginCandidates;
 
-    public VanillaPluginPlatform(final PluginEnvironment pluginEnvironment) {
-        this.pluginEnvironment = pluginEnvironment;
+    public VanillaPluginPlatform(final StandardEnvironment standardEnvironment) {
+        this.standardEnvironment = standardEnvironment;
         this.locatorServices = new HashMap<>();
         this.languageServices = new HashMap<>();
         this.locatorResources = new HashMap<>();
@@ -65,42 +68,51 @@ public final class VanillaPluginPlatform implements PluginPlatform {
 
     @Override
     public String version() {
-        return this.pluginEnvironment.blackboard().get(PluginKeys.VERSION).orElse("dev");
+        return this.standardEnvironment.blackboard().get(Keys.VERSION);
     }
 
     @Override
     public void setVersion(final String version) {
-        this.pluginEnvironment.blackboard().getOrCreate(PluginKeys.VERSION, () -> version);
+        this.standardEnvironment.blackboard().getOrCreate(Keys.VERSION, () -> version);
     }
 
     @Override
     public Logger logger() {
-        return this.pluginEnvironment.logger();
+        return this.standardEnvironment.logger();
     }
 
     @Override
     public Path baseDirectory() {
-        return this.pluginEnvironment.blackboard().get(PluginKeys.BASE_DIRECTORY).orElse(Paths.get("."));
+        return this.standardEnvironment.blackboard().get(Keys.BASE_DIRECTORY);
     }
 
     @Override
     public void setBaseDirectory(final Path baseDirectory) {
-        this.pluginEnvironment.blackboard().getOrCreate(PluginKeys.BASE_DIRECTORY, () -> baseDirectory);
+        this.standardEnvironment.blackboard().getOrCreate(Keys.BASE_DIRECTORY, () -> baseDirectory);
     }
 
     @Override
     public List<Path> pluginDirectories() {
-        return this.pluginEnvironment.blackboard().get(PluginKeys.PLUGIN_DIRECTORIES).orElseThrow(() -> new IllegalStateException("No plugin "
-            + "directories have been specified!"));
+        return this.standardEnvironment.blackboard().get(Keys.PLUGIN_DIRECTORIES);
     }
 
     @Override
     public void setPluginDirectories(final List<Path> pluginDirectories) {
-        this.pluginEnvironment.blackboard().getOrCreate(PluginKeys.PLUGIN_DIRECTORIES, () -> pluginDirectories);
+        this.standardEnvironment.blackboard().getOrCreate(Keys.PLUGIN_DIRECTORIES, () -> pluginDirectories);
     }
 
-    public PluginEnvironment getPluginEnvironment() {
-        return this.pluginEnvironment;
+    @Override
+    public String metadataFilePath() {
+        return this.standardEnvironment.blackboard().get(JVMKeys.METADATA_FILE_PATH);
+    }
+
+    @Override
+    public void setMetadataFilePath(final String metadataFilePath) {
+        this.standardEnvironment.blackboard().getOrCreate(JVMKeys.METADATA_FILE_PATH, () -> metadataFilePath);
+    }
+
+    public StandardEnvironment getStandardEnvironment() {
+        return this.standardEnvironment;
     }
 
     public Map<String, PluginResourceLocatorService<PluginResource>> getLocatorServices() {
@@ -116,12 +128,12 @@ public final class VanillaPluginPlatform implements PluginPlatform {
     }
 
     public Map<PluginLanguageService<PluginResource>, List<PluginCandidate<PluginResource>>> getCandidates() {
-        return this.pluginCandidates;
+        return Collections.unmodifiableMap(this.pluginCandidates);
     }
 
     public void initialize() {
         for (final Map.Entry<String, PluginLanguageService<PluginResource>> entry : this.languageServices.entrySet()) {
-            entry.getValue().initialize(this.pluginEnvironment);
+            entry.getValue().initialize(this.standardEnvironment);
         }
     }
 
@@ -135,7 +147,7 @@ public final class VanillaPluginPlatform implements PluginPlatform {
             try {
                 next = iter.next();
             } catch (final ServiceConfigurationError e) {
-                this.pluginEnvironment.logger().error("Error encountered initializing plugin resource locator!", e);
+                this.standardEnvironment.logger().error("Error encountered initializing plugin resource locator!", e);
                 continue;
             }
 
@@ -153,7 +165,7 @@ public final class VanillaPluginPlatform implements PluginPlatform {
             try {
                 next = iter.next();
             } catch (final ServiceConfigurationError e) {
-                this.pluginEnvironment.logger().error("Error encountered initializing plugin language service!", e);
+                this.standardEnvironment.logger().error("Error encountered initializing plugin language service!", e);
                 continue;
             }
 
@@ -164,7 +176,7 @@ public final class VanillaPluginPlatform implements PluginPlatform {
     public void locatePluginResources() {
         for (final Map.Entry<String, PluginResourceLocatorService<PluginResource>> locatorEntry : this.locatorServices.entrySet()) {
             final PluginResourceLocatorService<PluginResource> locatorService = locatorEntry.getValue();
-            final Set<PluginResource> resources = locatorService.locatePluginResources(this.pluginEnvironment);
+            final Set<PluginResource> resources = locatorService.locatePluginResources(this.standardEnvironment);
             if (!resources.isEmpty()) {
                 this.locatorResources.put(locatorEntry.getKey(), resources);
             }
@@ -178,14 +190,14 @@ public final class VanillaPluginPlatform implements PluginPlatform {
 
                 for (final PluginResource pluginResource : resourcesEntry.getValue()) {
                     try {
-                        final List<PluginCandidate<PluginResource>> candidates =
-                                languageService.createPluginCandidates(this.pluginEnvironment, pluginResource);
+                        final List<PluginCandidate<PluginResource>> candidates = languageService.createPluginCandidates(this.standardEnvironment,
+                                pluginResource);
                         if (candidates.isEmpty()) {
                             continue;
                         }
-
                         this.pluginCandidates.computeIfAbsent(languageService, k -> new LinkedList<>()).addAll(candidates);
-                    } catch (ClassCastException ignored) {
+                    } catch (final Exception ex) {
+                        this.standardEnvironment.logger().error("Failed to create plugin candidates", ex);
                     }
                 }
             }

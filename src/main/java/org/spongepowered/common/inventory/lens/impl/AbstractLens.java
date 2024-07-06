@@ -174,23 +174,21 @@ public abstract class AbstractLens implements Lens {
     }
 
     @Override
-    public Map<Key<?>, Object> getDataAt(final int index) {
-        return this.getDataFor(this.getLens(index));
-    }
-
-    @Override
     public Map<Key<?>, Object> getDataFor(final Lens child) {
+
         if (!this.has(child)) {
+            final Map<Key<?>, Object> dataMap = new HashMap<>();
             for (Lens spanningChild : this.spanningChildren) {
                 if (!(spanningChild instanceof SlotLens)) {
                     try {
-                        return spanningChild.getDataFor(child);
+                        dataMap.putAll(spanningChild.getDataFor(child));
                     } catch (Exception ignored) {}
                 }
             }
 
-            return Collections.emptyMap();
+            return dataMap;
         }
+
         return this.handleMap.get(child);
     }
 

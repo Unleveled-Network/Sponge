@@ -32,19 +32,17 @@ import org.spongepowered.api.Client;
 import org.spongepowered.api.Game;
 import org.spongepowered.api.Platform;
 import org.spongepowered.api.Server;
-import org.spongepowered.api.asset.AssetManager;
 import org.spongepowered.api.data.DataManager;
 import org.spongepowered.api.event.EventManager;
 import org.spongepowered.api.network.channel.ChannelManager;
 import org.spongepowered.api.plugin.PluginManager;
 import org.spongepowered.api.registry.BuilderProvider;
 import org.spongepowered.api.registry.FactoryProvider;
-import org.spongepowered.api.registry.RegistryHolder;
-import org.spongepowered.api.registry.RegistryScope;
 import org.spongepowered.api.service.ServiceProvider;
 import org.spongepowered.api.sql.SqlManager;
 import org.spongepowered.api.util.metric.MetricsConfigManager;
 import org.spongepowered.common.config.PluginConfigManager;
+import org.spongepowered.common.registry.RegistryHolderLogic;
 import org.spongepowered.common.registry.SpongeRegistryHolder;
 import org.spongepowered.common.scheduler.AsyncScheduler;
 import org.spongepowered.common.server.ServerConsoleSystemSubject;
@@ -54,7 +52,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 @Singleton
-public final class SpongeGame implements Game {
+public final class SpongeGame implements Game, SpongeRegistryHolder {
 
     private final Platform platform;
     private final BuilderProvider builderProvider;
@@ -62,7 +60,6 @@ public final class SpongeGame implements Game {
     private final DataManager dataManager;
     private final PluginManager pluginManager;
     private final EventManager eventManager;
-    private final AssetManager assetManager;
     private final PluginConfigManager configManager;
     private final ChannelManager channelManager;
     private final MetricsConfigManager metricsConfigManager;
@@ -70,7 +67,7 @@ public final class SpongeGame implements Game {
     private final ServiceProvider.GameScoped serviceProvider;
 
     private final AsyncScheduler asyncScheduler;
-    private RegistryHolder registryHolder;
+    private RegistryHolderLogic registryHolder;
 
     private Client client;
     private Server server;
@@ -80,9 +77,8 @@ public final class SpongeGame implements Game {
     @Inject
     public SpongeGame(final Platform platform, final BuilderProvider builderProvider,
             final FactoryProvider factoryProvider, final DataManager dataManager, final PluginManager pluginManager,
-            final EventManager eventManager, final AssetManager assetManager, final PluginConfigManager configManager,
-            final ChannelManager channelManager, final MetricsConfigManager metricsConfigManager,
-            final SqlManager sqlManager, final ServiceProvider.GameScoped serviceProvider) {
+            final EventManager eventManager, final PluginConfigManager configManager, final ChannelManager channelManager,
+            final MetricsConfigManager metricsConfigManager, final SqlManager sqlManager, final ServiceProvider.GameScoped serviceProvider) {
 
         this.platform = platform;
         this.builderProvider = builderProvider;
@@ -90,7 +86,6 @@ public final class SpongeGame implements Game {
         this.dataManager = dataManager;
         this.pluginManager = pluginManager;
         this.eventManager = eventManager;
-        this.assetManager = assetManager;
         this.configManager = configManager;
         this.channelManager = channelManager;
         this.metricsConfigManager = metricsConfigManager;
@@ -141,11 +136,6 @@ public final class SpongeGame implements Game {
     @Override
     public EventManager eventManager() {
         return this.eventManager;
-    }
-
-    @Override
-    public AssetManager assetManager() {
-        return this.assetManager;
     }
 
     @Override
@@ -222,14 +212,9 @@ public final class SpongeGame implements Game {
     }
 
     @Override
-    public RegistryScope registryScope() {
-        return RegistryScope.GAME;
-    }
-
-    @Override
-    public RegistryHolder registries() {
+    public RegistryHolderLogic registryHolder() {
         if (this.registryHolder == null) {
-            this.registryHolder = new SpongeRegistryHolder();
+            this.registryHolder = new RegistryHolderLogic();
         }
 
         return this.registryHolder;

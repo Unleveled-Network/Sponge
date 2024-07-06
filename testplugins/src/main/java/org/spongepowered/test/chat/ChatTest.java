@@ -29,7 +29,6 @@ import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.identity.Identified;
 import net.kyori.adventure.identity.Identity;
 import net.kyori.adventure.inventory.Book;
-import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -44,6 +43,7 @@ import org.spongepowered.api.adventure.ResolveOperations;
 import org.spongepowered.api.adventure.SpongeComponents;
 import org.spongepowered.api.command.Command;
 import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.exception.CommandException;
 import org.spongepowered.api.command.parameter.CommandContext;
 import org.spongepowered.api.command.parameter.Parameter;
 import org.spongepowered.api.data.Keys;
@@ -51,16 +51,20 @@ import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.Order;
 import org.spongepowered.api.event.filter.cause.Root;
+import org.spongepowered.api.event.filter.data.GetValue;
 import org.spongepowered.api.event.lifecycle.ConstructPluginEvent;
 import org.spongepowered.api.event.lifecycle.RegisterCommandEvent;
 import org.spongepowered.api.event.message.PlayerChatEvent;
 import org.spongepowered.api.event.network.ServerSideConnectionEvent;
+import org.spongepowered.api.item.ItemTypes;
+import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.util.locale.Locales;
 import org.spongepowered.plugin.PluginContainer;
-import org.spongepowered.plugin.jvm.Plugin;
+import org.spongepowered.plugin.builtin.jvm.Plugin;
 import org.spongepowered.test.LoadableModule;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Locale;
 import java.util.ResourceBundle;
 
@@ -89,7 +93,7 @@ public class ChatTest implements LoadableModule {
         Arrays.asList(Locales.EN_US, new Locale("en", "UD")).forEach(it ->
                 lang.registerAll(it, ResourceBundle.getBundle("org.spongepowered.test.chat.messages", it,
                                                               UTF8ResourceBundleControl.get()), false));
-        GlobalTranslator.get().addSource(lang);
+        GlobalTranslator.translator().addSource(lang);
     }
 
     @Override
@@ -124,6 +128,20 @@ public class ChatTest implements LoadableModule {
                           return CommandResult.success();
                       }).build(), "sendbook");
 
+        event.register(this.container, Command.builder()
+                .permission("chattest.giveitem")
+                .executor(ctx -> {
+                    final ServerPlayer player = ctx.cause().first(ServerPlayer.class)
+                            .orElseThrow(() -> new CommandException(Component.text("You must be a player to use this command!")));
+
+                    final ItemStack itemStack = ItemStack.builder().itemType(ItemTypes.PAPER)
+                            .add(Keys.CUSTOM_NAME, Component.translatable("chattest.item.name"))
+                            .add(Keys.LORE, Collections.singletonList(Component.translatable("chattest.item.lore"))).build();
+
+                    player.inventory().offer(itemStack);
+                    return CommandResult.success();
+                }).build(), "giveitem");
+
         final Parameter.Value<ServerPlayer> targetArg = Parameter.player().key("target").build();
         final Parameter.Value<Component> messageArg = Parameter.jsonText().key("message").build();
 
@@ -148,13 +166,14 @@ public class ChatTest implements LoadableModule {
         }
 
         @Listener(order = Order.LAST)
-        public void onChat(final PlayerChatEvent event, final @Root ServerPlayer player) {
+        public void onChat(final PlayerChatEvent event, final @Root ServerPlayer player, @GetValue("HEALTH") final double health) {
             ChatTest.LOGGER.info(Component.translatable("chattest.response.chat",
                                                                               event.message(),
                                                                               player.require(Keys.DISPLAY_NAME)
                                                                                       .decorate(TextDecoration.BOLD)
                                                                                       .colorIfAbsent(NamedTextColor.AQUA))
                                                                .color(NamedTextColor.DARK_AQUA));
+            ChatTest.LOGGER.info("Player has health of {}", health);
         }
     }
 }

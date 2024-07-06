@@ -24,8 +24,18 @@
  */
 package org.spongepowered.common.registry;
 
+import net.minecraft.tags.StaticTagHelper;
+import org.spongepowered.api.block.BlockType;
+import org.spongepowered.api.entity.EntityType;
+import org.spongepowered.api.fluid.FluidType;
+import org.spongepowered.api.item.ItemType;
+import org.spongepowered.api.registry.RegistryHolder;
 import org.spongepowered.api.registry.RegistryTypes;
 import org.spongepowered.api.service.economy.Currency;
+import org.spongepowered.common.accessor.tags.BlockTagsAccessor;
+import org.spongepowered.common.accessor.tags.EntityTypeTagsAccessor;
+import org.spongepowered.common.accessor.tags.FluidTagsAccessor;
+import org.spongepowered.common.accessor.tags.ItemTagsAccessor;
 
 public final class SpongeRegistries {
 
@@ -34,11 +44,12 @@ public final class SpongeRegistries {
 
         holder.createRegistry(RegistryTypes.ACCOUNT_DELETION_RESULT_TYPE, SpongeRegistryLoaders.accountDeletionResultType());
         holder.createRegistry(RegistryTypes.BAN_TYPE, SpongeRegistryLoaders.banType());
-        holder.createRegistry(SpongeRegistryTypes.TRANSACTION_TYPE, SpongeRegistryLoaders.blockTransactionTypes());
+        holder.createRegistry(SpongeRegistryTypes.TRACKER_TRANSACTION_TYPE, SpongeRegistryLoaders.blockTransactionTypes());
         holder.createRegistry(RegistryTypes.BODY_PART, SpongeRegistryLoaders.bodyPart());
         holder.createRegistry(RegistryTypes.REGISTRY_KEYED_VALUE_PARAMETER, SpongeRegistryLoaders.valueParameter());
         holder.createRegistry(RegistryTypes.CLICK_TYPE, SpongeRegistryLoaders.clickType());
         holder.createRegistry(RegistryTypes.CAT_TYPE, SpongeRegistryLoaders.catType());
+        holder.createRegistry(RegistryTypes.CHUNK_REGENERATE_FLAG, SpongeRegistryLoaders.chunkRegenerateFlag());
         holder.createRegistry(RegistryTypes.COMMAND_TREE_NODE_TYPE, SpongeRegistryLoaders.clientCompletionKey());
         holder.createRegistry(RegistryTypes.CLIENT_COMPLETION_TYPE, SpongeRegistryLoaders.clientCompletionType());
         holder.createRegistry(RegistryTypes.COMMAND_COMPLETION_PROVIDER, SpongeRegistryLoaders.clientSuggestionProvider());
@@ -52,6 +63,7 @@ public final class SpongeRegistries {
         holder.createRegistry(RegistryTypes.GOAL_TYPE, SpongeRegistryLoaders.goalType());
         holder.createRegistry(RegistryTypes.HORSE_COLOR, SpongeRegistryLoaders.horseColor());
         holder.createRegistry(RegistryTypes.HORSE_STYLE, SpongeRegistryLoaders.horseStyle());
+        holder.createRegistry(RegistryTypes.LIGHT_TYPE, SpongeRegistryLoaders.lightType());
         holder.createRegistry(RegistryTypes.LLAMA_TYPE, SpongeRegistryLoaders.llamaType());
         holder.createRegistry(RegistryTypes.MATTER_TYPE, SpongeRegistryLoaders.matterType());
         holder.createRegistry(RegistryTypes.MOVEMENT_TYPE, SpongeRegistryLoaders.movementType());
@@ -59,6 +71,7 @@ public final class SpongeRegistries {
         holder.createRegistry(RegistryTypes.NOTE_PITCH, SpongeRegistryLoaders.notePitch());
         holder.createRegistry(RegistryTypes.OPERATOR, SpongeRegistryLoaders.operator());
         holder.createRegistry(RegistryTypes.OPERATION, SpongeRegistryLoaders.operation());
+        holder.createRegistry(RegistryTypes.ORIENTATION, SpongeRegistryLoaders.orientation());
         holder.createRegistry(RegistryTypes.PALETTE_TYPE, SpongeRegistryLoaders.paletteType());
         holder.createRegistry(RegistryTypes.PARROT_TYPE, SpongeRegistryLoaders.parrotType());
         holder.createRegistry(RegistryTypes.PARTICLE_OPTION, SpongeRegistryLoaders.particleOption());
@@ -72,7 +85,8 @@ public final class SpongeRegistries {
         holder.createRegistry(RegistryTypes.SKIN_PART, SpongeRegistryLoaders.skinPart());
         holder.createRegistry(RegistryTypes.SPAWN_TYPE, SpongeRegistryLoaders.spawnType());
         holder.createRegistry(RegistryTypes.TELEPORT_HELPER_FILTER, SpongeRegistryLoaders.teleportHelperFilter(), true);
-        holder.createRegistry(RegistryTypes.TICKET_TYPE, SpongeRegistryLoaders.ticketType().values());
+        holder.createRegistry(RegistryTypes.TICKET_TYPE, SpongeRegistryLoaders.ticketType());
+        holder.createRegistry(RegistryTypes.TRANSACTION_TYPE, SpongeRegistryLoaders.transactionType());
         holder.createRegistry(SpongeRegistryTypes.VALIDATION_TYPE, SpongeRegistryLoaders.validationType());
         holder.createRegistry(RegistryTypes.WEATHER_TYPE, SpongeRegistryLoaders.weather());
         holder.createRegistry(RegistryTypes.DATA_FORMAT, SpongeRegistryLoaders.dataFormat());
@@ -80,8 +94,16 @@ public final class SpongeRegistries {
         holder.createRegistry(RegistryTypes.MAP_DECORATION_ORIENTATION, SpongeRegistryLoaders.mapDecorationOrientation());
         holder.createRegistry(RegistryTypes.MAP_DECORATION_TYPE, SpongeRegistryLoaders.mapDecorationType());
         holder.createRegistry(RegistryTypes.MAP_SHADE, SpongeRegistryLoaders.mapShade());
+        holder.createRegistry(RegistryTypes.TAG_TYPES, SpongeRegistryLoaders.tagTypes());
+        holder.wrapTagHelperAsRegistry(RegistryTypes.BLOCK_TYPE_TAGS, (StaticTagHelper<BlockType>) (Object) BlockTagsAccessor.accessor$HELPER());
+        holder.wrapTagHelperAsRegistry(RegistryTypes.ITEM_TYPE_TAGS, (StaticTagHelper<ItemType>) (Object) ItemTagsAccessor.accessor$HELPER());
+        holder.wrapTagHelperAsRegistry(RegistryTypes.ENTITY_TYPE_TAGS, (StaticTagHelper<EntityType<?>>) (Object) EntityTypeTagsAccessor.accessor$HELPER());
+        holder.wrapTagHelperAsRegistry(RegistryTypes.FLUID_TYPE_TAGS, (StaticTagHelper<FluidType>) (Object) FluidTagsAccessor.accessor$HELPER());
+        holder.createIdentityRegistry(RegistryTypes.BOOLEAN_STATE_PROPERTY, SpongeRegistryLoaders.booleanStateProperties());
+        holder.createIdentityRegistry(RegistryTypes.INTEGER_STATE_PROPERTY, SpongeRegistryLoaders.integerStateProperties());
+        holder.createIdentityRegistry(RegistryTypes.ENUM_STATE_PROPERTY, SpongeRegistryLoaders.enumStateProperties());
     }
 
-    public static void registerServerRegistries(final SpongeRegistryHolder holder) {
+    public static void registerServerRegistries(final RegistryHolder holder) {
     }
 }

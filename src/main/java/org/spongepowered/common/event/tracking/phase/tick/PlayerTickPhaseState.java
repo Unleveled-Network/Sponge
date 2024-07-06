@@ -24,16 +24,16 @@
  */
 package org.spongepowered.common.event.tracking.phase.tick;
 
+import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.event.CauseStackManager;
-import org.spongepowered.api.event.EventContextKeys;
-import org.spongepowered.api.event.cause.entity.SpawnTypes;
 import org.spongepowered.common.event.tracking.PhaseTracker;
 import org.spongepowered.common.event.tracking.TrackingUtil;
 import org.spongepowered.common.event.tracking.phase.general.ExplosionContext;
 
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 
 class PlayerTickPhaseState extends TickPhaseState<PlayerTickContext> {
 
@@ -44,10 +44,7 @@ class PlayerTickPhaseState extends TickPhaseState<PlayerTickContext> {
 
     @Override
     protected PlayerTickContext createNewContext(final PhaseTracker tracker) {
-        return new PlayerTickContext(tracker)
-                .addCaptures()
-                .addEntityDropCaptures()
-                ;
+        return new PlayerTickContext(tracker);
     }
 
     @Override
@@ -57,31 +54,24 @@ class PlayerTickPhaseState extends TickPhaseState<PlayerTickContext> {
 
     @Override
     public void unwind(final PlayerTickContext context) {
-        final Player player = context.getSource(Player.class)
-                .orElseThrow(TrackingUtil.throwWithContext("Not ticking on a Player!", context));
-        try (final CauseStackManager.StackFrame frame = PhaseTracker.getCauseStackManager().pushCauseFrame()) {
-            frame.pushCause(player);
-//            frame.addContext(EventContextKeys.SPAWN_TYPE, SpawnTypes.PASSIVE);
-//            context.getCapturedEntitySupplier().acceptAndClearIfNotEmpty(entities -> {
-//                SpongeCommonEventFactory.callSpawnEntity(entities, context);
-//            });
-            frame.addContext(EventContextKeys.SPAWN_TYPE, SpawnTypes.DROPPED_ITEM);
-
-            TrackingUtil.processBlockCaptures(context);
-        }
+        TrackingUtil.processBlockCaptures(context);
     }
 
     @Override
     public void appendContextPreExplosion(final ExplosionContext explosionContext, final PlayerTickContext context) {
         final Player player = context.getSource(Player.class)
                 .orElseThrow(TrackingUtil.throwWithContext("Expected to be processing over a ticking TileEntity!", context));
-        explosionContext.creator(((ServerPlayer) player).user());
-        explosionContext.notifier(((ServerPlayer) player).user());
+        explosionContext.creator(player.uniqueId());
+        explosionContext.notifier(player.uniqueId());
         explosionContext.source(player);
     }
 
     @Override
-    public boolean doesDenyChunkRequests(final PlayerTickContext context) {
-        return false;
+    public Supplier<ResourceKey> attemptWorldKey(final PlayerTickContext context) {
+        final ServerPlayer entity = context.getSource(ServerPlayer.class)
+            .orElseThrow(
+                () -> new IllegalStateException("Expected to be ticking a Player, but we're not ticking a player"));
+        return () -> entity.world().key();
     }
+
 }

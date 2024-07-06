@@ -30,8 +30,10 @@ import net.minecraft.server.players.PlayerList;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.common.event.tracking.PhaseContext;
 import org.spongepowered.common.event.tracking.PhaseTracker;
 import org.spongepowered.common.event.tracking.context.GeneralizedContext;
+import org.spongepowered.common.event.tracking.phase.block.BlockPhase;
 import org.spongepowered.common.event.tracking.phase.player.PlayerPhase;
 
 @Mixin(PlayerList.class)
@@ -49,4 +51,21 @@ public class PlayerListMixin_Tracker {
         }
     }
 
+    @Redirect(method = "placeNewPlayer",
+              at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;initMenu()V"))
+    private void tracker$onPlaceNewPlayerInitMenu(final ServerPlayer player) {
+        try (final PhaseContext<?> context = BlockPhase.State.RESTORING_BLOCKS.createPhaseContext(PhaseTracker.SERVER).source(player);) {
+            context.buildAndSwitch();
+            player.initMenu();
+        }
+    }
+
+    @Redirect(method = "respawn",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;initMenu()V"))
+    private void tracker$onRespawnInitMenu(final ServerPlayer player) {
+        try (final PhaseContext<?> context = BlockPhase.State.RESTORING_BLOCKS.createPhaseContext(PhaseTracker.SERVER).source(player);) {
+            context.buildAndSwitch();
+            player.initMenu();
+        }
+    }
 }

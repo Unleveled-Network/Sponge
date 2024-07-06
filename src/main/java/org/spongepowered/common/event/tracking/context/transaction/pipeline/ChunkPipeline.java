@@ -24,12 +24,20 @@
  */
 package org.spongepowered.common.event.tracking.context.transaction.pipeline;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.spongepowered.common.bridge.world.level.block.state.BlockStateBridge;
 import org.spongepowered.common.event.tracking.PhaseContext;
-import org.spongepowered.common.event.tracking.context.transaction.ChangeBlock;
 import org.spongepowered.common.event.tracking.context.transaction.EffectTransactor;
 import org.spongepowered.common.event.tracking.context.transaction.ResultingTransactionBySideEffect;
+import org.spongepowered.common.event.tracking.context.transaction.block.ChangeBlock;
 import org.spongepowered.common.event.tracking.context.transaction.effect.EffectResult;
 import org.spongepowered.common.event.tracking.context.transaction.effect.ProcessingSideEffect;
 import org.spongepowered.common.world.SpongeBlockChangeFlag;
@@ -40,13 +48,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
-import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.chunk.LevelChunkSection;
 
 public final class ChunkPipeline implements BlockPipeline {
 
@@ -111,10 +112,11 @@ public final class ChunkPipeline implements BlockPipeline {
             return null;
         }
         final ServerLevel serverWorld = this.serverWorld.get();
+        final int oldLight = ((BlockStateBridge) currentState).bridge$getLightValue(serverWorld, pos);
         final int oldOpacity = currentState.getLightBlock(serverWorld, pos);
         final SpongeBlockChangeFlag flag = this.transaction.getBlockChangeFlag();
         final @Nullable BlockEntity existing = this.chunkSupplier.get().getBlockEntity(pos, LevelChunk.EntityCreationType.CHECK);
-        PipelineCursor formerState = new PipelineCursor(currentState, oldOpacity, pos, existing, (Entity) null, limit);
+        PipelineCursor formerState = new PipelineCursor(currentState, oldLight, oldOpacity, pos, existing, (Entity) null, limit);
 
         for (final ResultingTransactionBySideEffect effect : this.chunkEffects) {
             try (final EffectTransactor ignored = context.getTransactor().pushEffect(effect)) {
@@ -129,7 +131,7 @@ public final class ChunkPipeline implements BlockPipeline {
                     return result.resultingState;
                 }
                 if (formerState.drops.isEmpty() && !result.drops.isEmpty()) {
-                    formerState = new PipelineCursor(currentState, oldOpacity, pos, existing, null, result.drops, limit);
+                    formerState = new PipelineCursor(currentState, oldLight, oldOpacity, pos, existing, null, result.drops, limit);
                 }
             }
         }

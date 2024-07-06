@@ -24,35 +24,38 @@
  */
 package org.spongepowered.common.mixin.core.world.entity.vehicle;
 
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
-import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.common.world.portal.PlatformTeleporter;
-
-import javax.annotation.Nullable;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.vehicle.AbstractMinecartContainer;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+
+import javax.annotation.Nullable;
 
 @Mixin(AbstractMinecartContainer.class)
 public abstract class AbstractMinecartContainerMixin extends AbstractMinecartMixin {
 
+    // @formatter:off
     @Shadow private boolean dropEquipment;
+    // @formatter:on
+
+    @Override
+    protected void impl$onPreWorldChangeCanceled() {
+        this.dropEquipment = true;
+    }
 
     /**
      * @author Zidane - June 2019 - 1.12.2
      * @author i509VCB - Feb 2020 - 1.14.4
-     * @author dualspiral - 21 December 2020 - 1.16.4
+     * @author dualspiral - 24th July 2021 - 1.16.5
      * @reason Only have this Minecart not drop contents if we actually changed dimension
      */
     @Override
     @Nullable
-    public Entity bridge$changeDimension(final ServerLevel world, final PlatformTeleporter platformTeleporter) {
-        final Entity entity = super.bridge$changeDimension(world, platformTeleporter);
-
-        if (entity instanceof AbstractMinecartContainer) {
-            // We actually teleported so...
-            this.dropEquipment = false;
+    protected @org.checkerframework.checker.nullness.qual.Nullable Entity impl$postProcessChangeDimension(final Entity entity) {
+        if (!(entity instanceof AbstractMinecartContainer)) {
+            // it was false, if the entity returned by the teleporter is obviously not
+            // representing this, this should drop its equipment again.
+            this.dropEquipment = true;
         }
 
         return entity;

@@ -27,7 +27,7 @@ package org.spongepowered.common.scheduler;
 public abstract class SyncScheduler extends SpongeScheduler {
 
     // The number of ticks elapsed since this scheduler began.
-    private volatile long counter = 0L;
+    private long counter = 0L;
 
     SyncScheduler(final String tag) {
         super(tag);
@@ -49,10 +49,5 @@ public abstract class SyncScheduler extends SpongeScheduler {
             return this.counter * SpongeScheduler.TICK_DURATION_NS;
         }
         return super.timestamp(false);
-    }
-
-    @Override
-    protected void executeTaskRunnable(final SpongeScheduledTask task, final Runnable runnable) {
-        runnable.run();
     }
 }

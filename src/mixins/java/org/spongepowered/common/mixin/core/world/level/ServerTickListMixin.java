@@ -60,7 +60,6 @@ public abstract class ServerTickListMixin<T> {
     DO NOT REORDER THIS INJECT AFTER THE REDIRECT ON QUEUE;ADD DUE TO MIXIN BUG
     https://github.com/SpongePowered/Mixin/issues/493
      */
-    @SuppressWarnings("unchecked")
     @Inject(
         method = "tick",
         at = @At(
@@ -69,11 +68,9 @@ public abstract class ServerTickListMixin<T> {
             remap = false,
             shift = At.Shift.AFTER
         ),
-        locals = LocalCapture.CAPTURE_FAILHARD
+        locals = LocalCapture.CAPTURE_FAILEXCEPTION
     )
-    private void impl$markDataAsCompleted(CallbackInfo ci, int var0,
-        ServerChunkCache var1, Iterator var2,
-        TickNextTickData var4) {
+    private void impl$markDataAsCompleted(CallbackInfo ci, int var0, ServerChunkCache var1, Iterator var2, TickNextTickData var4) {
         ((TickNextTickDataBridge<T>) var4).bridge$setState(ScheduledUpdate.State.FINISHED);
     }
 

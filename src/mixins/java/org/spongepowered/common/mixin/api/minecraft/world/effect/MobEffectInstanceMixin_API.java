@@ -31,6 +31,7 @@ import org.spongepowered.api.data.persistence.DataContainer;
 import org.spongepowered.api.data.persistence.Queries;
 import org.spongepowered.api.effect.potion.PotionEffect;
 import org.spongepowered.api.effect.potion.PotionEffectType;
+import org.spongepowered.api.util.Ticks;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -45,6 +46,7 @@ public abstract class MobEffectInstanceMixin_API implements PotionEffect {
     @Shadow private int amplifier;
     @Shadow private boolean ambient;
     @Shadow private boolean visible;
+    @Shadow private boolean showIcon;
     // @formatter:on
 
     @Override
@@ -53,8 +55,8 @@ public abstract class MobEffectInstanceMixin_API implements PotionEffect {
     }
 
     @Override
-    public int duration() {
-        return this.duration;
+    public Ticks duration() {
+        return Ticks.of(this.duration);
     }
 
     @Override
@@ -73,6 +75,11 @@ public abstract class MobEffectInstanceMixin_API implements PotionEffect {
     }
 
     @Override
+    public boolean showsIcon() {
+        return this.showIcon;
+    }
+
+    @Override
     public int contentVersion() {
         return Constants.Sponge.Potion.CURRENT_VERSION;
     }
@@ -80,13 +87,14 @@ public abstract class MobEffectInstanceMixin_API implements PotionEffect {
     @Override
     public DataContainer toContainer() {
         final ResourceKey key = (ResourceKey) (Object) Registry.MOB_EFFECT.getKey((MobEffect) this.type());
-        
+
         return DataContainer.createNew()
                 .set(Queries.CONTENT_VERSION, this.contentVersion())
                 .set(Constants.Item.Potions.POTION_TYPE, key)
                 .set(Constants.Item.Potions.POTION_DURATION, this.duration)
                 .set(Constants.Item.Potions.POTION_AMPLIFIER, this.amplifier)
                 .set(Constants.Item.Potions.POTION_AMBIANCE, this.ambient)
-                .set(Constants.Item.Potions.POTION_SHOWS_PARTICLES, this.visible);
+                .set(Constants.Item.Potions.POTION_SHOWS_PARTICLES, this.visible)
+                .set(Constants.Item.Potions.POTION_SHOWS_ICON, this.showIcon);
     }
 }

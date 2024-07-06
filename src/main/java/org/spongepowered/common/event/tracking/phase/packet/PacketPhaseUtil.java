@@ -53,7 +53,9 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.spongepowered.api.data.Transaction;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.item.inventory.ItemStackSnapshot;
@@ -65,12 +67,11 @@ import org.spongepowered.common.accessor.world.entity.animal.PigAccessor;
 import org.spongepowered.common.accessor.world.entity.animal.SheepAccessor;
 import org.spongepowered.common.accessor.world.entity.animal.WolfAccessor;
 import org.spongepowered.common.accessor.world.inventory.SlotAccessor;
-import org.spongepowered.common.bridge.server.level.ServerPlayerBridge;
-import org.spongepowered.common.bridge.world.inventory.container.TrackedInventoryBridge;
-import org.spongepowered.common.bridge.world.level.block.TrackedBlockBridge;
+import org.spongepowered.common.bridge.world.level.block.TrackableBlockBridge;
 import org.spongepowered.common.event.tracking.IPhaseState;
 import org.spongepowered.common.event.tracking.PhaseContext;
 import org.spongepowered.common.event.tracking.PhaseTracker;
+import org.spongepowered.common.event.tracking.phase.block.BlockPhase;
 import org.spongepowered.common.inventory.adapter.InventoryAdapter;
 import org.spongepowered.common.inventory.adapter.impl.slots.SlotAdapter;
 import org.spongepowered.common.item.util.ItemStackUtil;
@@ -79,39 +80,59 @@ import java.util.List;
 
 public final class PacketPhaseUtil {
 
-    @SuppressWarnings("rawtypes")
-    public static boolean handleSlotRestore(final Player player, final @Nullable AbstractContainerMenu containerMenu, final List<SlotTransaction> slotTransactions, final boolean eventCancelled) {
-        boolean restoredAny = false;
-        for (final SlotTransaction slotTransaction : slotTransactions) {
+    public static void handleSlotRestore(@Nullable final Player player, final @Nullable AbstractContainerMenu containerMenu, final List<SlotTransaction> slotTransactions, final boolean eventCancelled) {
+        try (PhaseContext<@NonNull ?> ignored = BlockPhase.State.RESTORING_BLOCKS.createPhaseContext(PhaseTracker.SERVER).buildAndSwitch()) {
+            boolean restoredAny = false;
+            for (final SlotTransaction slotTransaction : slotTransactions) {
 
-            if ((!slotTransaction.custom().isPresent() && slotTransaction.isValid()) && !eventCancelled) {
-                continue;
+                if ((!slotTransaction.custom().isPresent() && slotTransaction.isValid()) && !eventCancelled) {
+                    continue;
+                }
+                restoredAny = true;
+                final org.spongepowered.api.item.inventory.Slot slot = slotTransaction.slot();
+                final ItemStackSnapshot snapshot = eventCancelled || !slotTransaction.isValid() ? slotTransaction.original() : slotTransaction.custom().get();
+                if (containerMenu == null || slot.viewedSlot() == slot) {
+                    final org.spongepowered.api.item.inventory.ItemStack stack = snapshot.createStack();
+                    slot.set(stack);
+                    if (player instanceof net.minecraft.server.level.ServerPlayer) {
+                        final int slotNumber = ((SlotAdapter) slot).getOrdinal();
+                        ((net.minecraft.server.level.ServerPlayer) player).connection.send(new ClientboundContainerSetSlotPacket(-2, slotNumber, ItemStackUtil.toNative(stack)));
+                    }
+                } else {
+                    final int slotNumber = ((SlotAdapter) slot).getOrdinal();
+                    final Slot nmsSlot = containerMenu.getSlot(slotNumber);
+                    if (nmsSlot != null) {
+                        nmsSlot.set(ItemStackUtil.fromSnapshotToNative(snapshot));
+                    }
+                }
             }
-            restoredAny = true;
-            final SlotAdapter slot = (SlotAdapter) slotTransaction.slot();
-            final ItemStackSnapshot snapshot = eventCancelled || !slotTransaction.isValid() ? slotTransaction.original() : slotTransaction.custom().get();
-            if (containerMenu == null) {
-                slot.set(snapshot.createStack());
-            } else {
-                final int slotNumber = slot.getOrdinal();
-                final Slot nmsSlot = containerMenu.getSlot(slotNumber);
-                if (nmsSlot != null) {
-                    nmsSlot.set(ItemStackUtil.fromSnapshotToNative(snapshot));
+            if (restoredAny && player instanceof net.minecraft.server.level.ServerPlayer) {
+                if (containerMenu != null) {
+                    containerMenu.broadcastChanges();
+                    if (player.containerMenu == containerMenu) {
+                        ((net.minecraft.server.level.ServerPlayer) player).refreshContainer(containerMenu);
+                    }
+                } else {
+                    player.inventoryMenu.broadcastChanges();
                 }
             }
         }
-        if (containerMenu != null) {
-            final boolean capture = ((TrackedInventoryBridge) containerMenu).bridge$capturingInventory();
-            ((TrackedInventoryBridge) containerMenu).bridge$setCaptureInventory(false);
-            containerMenu.broadcastChanges();
-            ((TrackedInventoryBridge) containerMenu).bridge$setCaptureInventory(capture);
-            // If event is cancelled, always resync with player
-            // we must also validate the player still has the same container open after the event has been processed
-            if (eventCancelled && player.containerMenu == containerMenu && player instanceof net.minecraft.server.level.ServerPlayer) {
-                ((net.minecraft.server.level.ServerPlayer) player).refreshContainer(containerMenu);
-            }
+    }
+
+    public static void handleCursorRestore(final Player player, final Transaction<ItemStackSnapshot> cursorTransaction, final boolean eventCancelled) {
+        final ItemStackSnapshot cursorSnap;
+        if (eventCancelled || !cursorTransaction.isValid()) {
+            cursorSnap = cursorTransaction.original();
+        } else if (cursorTransaction.custom().isPresent()) {
+            cursorSnap = cursorTransaction.finalReplacement();
+        } else {
+            return;
         }
-        return restoredAny;
+        final ItemStack cursor = ItemStackUtil.fromSnapshotToNative(cursorSnap);
+        player.inventory.setCarried(cursor);
+        if (player instanceof net.minecraft.server.level.ServerPlayer) {
+            ((net.minecraft.server.level.ServerPlayer) player).connection.send(new ClientboundContainerSetSlotPacket(-1, -1, cursor));
+        }
     }
 
     public static void handleCustomCursor(final Player player, final ItemStackSnapshot customCursor) {
@@ -215,7 +236,7 @@ public final class PacketPhaseUtil {
                                     for(int z = min.getZ(); z <= max.getZ(); ++z) {
                                         pos.set(x, y, z);
                                         final Block block = packetPlayer.level.getBlockState(pos).getBlock();
-                                        if (((TrackedBlockBridge) block).bridge$hasEntityInsideLogic()) {
+                                        if (((TrackableBlockBridge) block).bridge$hasEntityInsideLogic()) {
                                             ignoreMovementCapture = false;
                                         }
                                     }
@@ -229,32 +250,22 @@ public final class PacketPhaseUtil {
                 if (ignoreMovementCapture || (packetIn instanceof ServerboundClientInformationPacket)) {
                     packetIn.handle(netHandler);
                 } else {
-                    final ItemStackSnapshot cursor = ItemStackUtil.snapshotOf(packetPlayer.inventory.getCarried());
                     final IPhaseState<? extends PacketContext<?>> packetState = PacketPhase.getInstance().getStateForPacket(packetIn);
                     // At the very least make an unknown packet state case.
                     final PacketContext<?> context = packetState.createPhaseContext(PhaseTracker.SERVER);
+                    context.source(packetPlayer)
+                           .packetPlayer(packetPlayer)
+                           .packet(packetIn);
                     if (!PacketPhase.getInstance().isPacketInvalid(packetIn, packetPlayer, packetState)) {
-                        context
-                            .source(packetPlayer)
-                            .packetPlayer(packetPlayer)
-                            .packet(packetIn)
-                            .cursor(cursor);
 
                         PacketPhase.getInstance().populateContext(packetIn, packetPlayer, packetState, context);
-                        context.creator(((ServerPlayer) packetPlayer).user());
-                        context.notifier(((ServerPlayer) packetPlayer).user());
+                        context.creator(((ServerPlayer) packetPlayer).uniqueId());
+                        context.notifier(((ServerPlayer) packetPlayer).uniqueId());
                     }
                     try (final PhaseContext<?> packetContext = context) {
                         packetContext.buildAndSwitch();
                         packetIn.handle(netHandler);
-
                     }
-
-                    if (packetIn instanceof ServerboundClientCommandPacket) {
-                        // update the reference of player
-                        packetPlayer = ((ServerGamePacketListenerImpl) netHandler).player;
-                    }
-                    ((ServerPlayerBridge) packetPlayer).bridge$setPacketItem(ItemStack.EMPTY);
                 }
             }
         } else { // client

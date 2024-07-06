@@ -59,6 +59,7 @@ import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.data.type.HorseColors;
 import org.spongepowered.api.data.type.HorseStyles;
 import org.spongepowered.api.data.type.InstrumentTypes;
+import org.spongepowered.api.data.type.ItemTiers;
 import org.spongepowered.api.data.type.LlamaTypes;
 import org.spongepowered.api.data.type.MatterTypes;
 import org.spongepowered.api.data.type.MooshroomTypes;
@@ -72,7 +73,6 @@ import org.spongepowered.api.data.type.RailDirections;
 import org.spongepowered.api.data.type.SlabPortions;
 import org.spongepowered.api.data.type.SpellTypes;
 import org.spongepowered.api.data.type.StairShapes;
-import org.spongepowered.api.data.type.ItemTiers;
 import org.spongepowered.api.data.type.TropicalFishShapes;
 import org.spongepowered.api.data.type.VillagerTypes;
 import org.spongepowered.api.data.type.WireAttachmentType;
@@ -118,7 +118,7 @@ import org.spongepowered.api.world.weather.WeatherTypes;
 import org.spongepowered.math.vector.Vector3d;
 import org.spongepowered.math.vector.Vector3i;
 import org.spongepowered.plugin.PluginContainer;
-import org.spongepowered.plugin.jvm.Plugin;
+import org.spongepowered.plugin.builtin.jvm.Plugin;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -132,7 +132,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
-import java.util.UUID;
 
 @Plugin("datatest")
 public final class DataTest  {
@@ -195,10 +194,10 @@ public final class DataTest  {
 
         final ItemStack goldenApple = ItemStack.of(ItemTypes.ENCHANTED_GOLDEN_APPLE);
         final List<PotionEffect> notchAppleEffects = Arrays.asList(
-                PotionEffect.builder().potionType(PotionEffectTypes.REGENERATION).amplifier(1).ambient(false).duration(400).build(),
-                PotionEffect.builder().potionType(PotionEffectTypes.RESISTANCE).amplifier(0).ambient(false).duration(6000).build(),
-                PotionEffect.builder().potionType(PotionEffectTypes.FIRE_RESISTANCE).amplifier(0).ambient(false).duration(6000).build(),
-                PotionEffect.builder().potionType(PotionEffectTypes.ABSORPTION).amplifier(3).ambient(false).duration(2400).build());
+                PotionEffect.builder().potionType(PotionEffectTypes.REGENERATION).amplifier(1).ambient(false).duration(Ticks.of(400)).build(),
+                PotionEffect.builder().potionType(PotionEffectTypes.RESISTANCE).amplifier(0).ambient(false).duration(Ticks.of(6000)).build(),
+                PotionEffect.builder().potionType(PotionEffectTypes.FIRE_RESISTANCE).amplifier(0).ambient(false).duration(Ticks.of(6000)).build(),
+                PotionEffect.builder().potionType(PotionEffectTypes.ABSORPTION).amplifier(3).ambient(false).duration(Ticks.of(2400)).build());
         this.checkGetWeightedData(goldenApple, Keys.APPLICABLE_POTION_EFFECTS, notchAppleEffects);
 
         this.checkOfferListData(goldenApple, Keys.APPLIED_ENCHANTMENTS, Arrays.asList(Enchantment.of(EnchantmentTypes.SHARPNESS, 5)));
@@ -660,6 +659,12 @@ public final class DataTest  {
         this.checkOfferData(horse, Keys.HORSE_COLOR, HorseColors.WHITE.get());
         this.checkOfferData(horse, Keys.HORSE_STYLE, HorseStyles.BLACK_DOTS.get());
 
+        final ItemStack snowball = ItemStack.of(ItemTypes.SNOWBALL, 16);
+        this.checkGetData(snowball, Keys.INACCURACY, 1.0);
+        this.checkOfferData(snowball, Keys.INACCURACY, 10.0);
+        snowball.offer(Keys.CUSTOM_NAME, Component.text("I am very inaccurate :)", NamedTextColor.RED));
+        player.inventory().offer(snowball);
+
         this.checkOfferData(itemEntity, Keys.INFINITE_DESPAWN_DELAY, true);
         this.checkOfferData(itemEntity, Keys.INFINITE_DESPAWN_DELAY, false);
         this.checkOfferData(itemEntity, Keys.INFINITE_PICKUP_DELAY, true);
@@ -946,7 +951,7 @@ public final class DataTest  {
 
 //        this.checkOfferData(player, Keys.LAST_DATE_JOINED, Instant.now().minus(1, TemporalUnits.DAYS));
 //        this.checkOfferData(player, Keys.LAST_DATE_PLAYED, Instant.now().minus(1, TemporalUnits.DAYS));
-        final User user = Sponge.server().userManager().find(player.uniqueId()).get();
+        final User user = Sponge.server().userManager().load(player.uniqueId()).join().get();
 //        this.checkOfferData(user, Keys.LAST_DATE_JOINED, Instant.now().minus(1, TemporalUnits.DAYS));
 //        this.checkOfferData(user, Keys.LAST_DATE_PLAYED, Instant.now().minus(1, TemporalUnits.DAYS));
 
@@ -1349,11 +1354,10 @@ public final class DataTest  {
     }
 
     private <V extends Value<?>> boolean checkResult(final DataHolder.Mutable holder, final Key<V> key, final Object value, final DataTransactionResult result) {
-        if (!result.isSuccessful()) {
-            this.plugin.logger().error("Failed offer on {} for {} with {}.", DataTest.getHolderName(holder), key.key()
-                    .asString(), value);
+        if (result.isSuccessful()) {
             return true;
         }
+        this.plugin.logger().error("Failed offer on {} for {} with {}.", DataTest.getHolderName(holder), key.key().asString(), value);
         return false;
     }
 
@@ -1401,9 +1405,9 @@ public final class DataTest  {
     private static String getHolderName(final DataHolder holder) {
         String value = "";
         if (holder instanceof BlockState) {
-            value = RegistryTypes.BLOCK_TYPE.keyFor(Sponge.game().registries(), ((BlockState) holder).type()).value();
+            value = RegistryTypes.BLOCK_TYPE.keyFor(Sponge.game(), ((BlockState) holder).type()).value();
         } else if (holder instanceof ItemStack) {
-            value = RegistryTypes.ITEM_TYPE.keyFor(Sponge.game().registries(), ((ItemStack) holder).type()).value();
+            value = RegistryTypes.ITEM_TYPE.keyFor(Sponge.game(), ((ItemStack) holder).type()).value();
         }
         return String.format("%s[%s]", holder.getClass().getSimpleName(), value);
     }

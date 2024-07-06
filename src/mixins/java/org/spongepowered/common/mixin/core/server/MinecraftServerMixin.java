@@ -24,15 +24,16 @@
  */
 package org.spongepowered.common.mixin.core.server;
 
-import co.aikar.timings.Timing;
 import com.google.inject.Injector;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.server.players.GameProfileCache;
 import net.minecraft.server.players.PlayerList;
+import net.minecraft.util.ProgressListener;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
@@ -44,10 +45,13 @@ import org.spongepowered.api.Sponge;
 import org.spongepowered.api.datapack.DataPackTypes;
 import org.spongepowered.api.event.Cause;
 import org.spongepowered.api.event.CauseStackManager;
+import org.spongepowered.api.event.SpongeEventFactory;
+import org.spongepowered.api.event.world.UnloadWorldEvent;
 import org.spongepowered.api.resourcepack.ResourcePack;
 import org.spongepowered.api.service.permission.Subject;
 import org.spongepowered.api.service.permission.SubjectProxy;
 import org.spongepowered.api.world.SerializationBehavior;
+import org.spongepowered.api.world.server.ServerWorld;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
@@ -62,18 +66,16 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 import org.spongepowered.common.SpongeCommon;
 import org.spongepowered.common.SpongeServer;
 import org.spongepowered.common.applaunch.config.core.SpongeConfigs;
-import org.spongepowered.common.bridge.commands.CommandSourceProviderBridge;
 import org.spongepowered.common.bridge.commands.CommandSourceBridge;
+import org.spongepowered.common.bridge.commands.CommandSourceProviderBridge;
 import org.spongepowered.common.bridge.server.MinecraftServerBridge;
-import org.spongepowered.common.bridge.server.players.GameProfileCacheBridge;
 import org.spongepowered.common.bridge.server.level.ServerLevelBridge;
+import org.spongepowered.common.bridge.server.players.GameProfileCacheBridge;
 import org.spongepowered.common.bridge.world.level.storage.PrimaryLevelDataBridge;
 import org.spongepowered.common.config.inheritable.InheritableConfigHandle;
 import org.spongepowered.common.config.inheritable.WorldConfig;
 import org.spongepowered.common.datapack.SpongeDataPackManager;
 import org.spongepowered.common.event.tracking.PhaseTracker;
-import co.aikar.timings.sponge.SpongeTimings;
-import co.aikar.timings.sponge.TimingsManager;
 import org.spongepowered.common.resourcepack.SpongeResourcePack;
 import org.spongepowered.common.service.server.SpongeServerScopedServiceProvider;
 
@@ -81,9 +83,9 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.Collection;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 import javax.annotation.Nullable;
@@ -105,10 +107,13 @@ public abstract class MinecraftServerMixin implements SpongeServer, MinecraftSer
     @Shadow public abstract boolean shadow$isRunning();
     @Shadow public abstract PlayerList shadow$getPlayerList();
     @Shadow public abstract PackRepository shadow$getPackRepository();
+    @Shadow protected abstract void shadow$detectBundledResources();
+
+    @Shadow protected abstract void loadLevel();
     // @formatter:on
 
-    @Nullable private SpongeServerScopedServiceProvider impl$serviceProvider;
-    @Nullable private ResourcePack impl$resourcePack;
+    private @Nullable SpongeServerScopedServiceProvider impl$serviceProvider;
+    private @Nullable ResourcePack impl$resourcePack;
 
     @Override
     public Subject subject() {
@@ -116,8 +121,10 @@ public abstract class MinecraftServerMixin implements SpongeServer, MinecraftSer
     }
 
     @Inject(method = "spin", at = @At("TAIL"), locals = LocalCapture.CAPTURE_FAILEXCEPTION)
-    private static void impl$setThreadOnServerPhaseTracker(Function<Thread, MinecraftServer> p_240784_0_, final CallbackInfoReturnable<MinecraftServerMixin> cir,
-            AtomicReference<MinecraftServer> atomicReference, Thread thread) {
+    private static void impl$setThreadOnServerPhaseTracker(final Function<Thread, MinecraftServer> p_240784_0_,
+                                                           final CallbackInfoReturnable<MinecraftServerMixin> cir,
+                                                           final AtomicReference<MinecraftServer> atomicReference,
+                                                           final Thread thread) {
         try {
             PhaseTracker.SERVER.setThread(thread);
         } catch (final IllegalAccessException e) {
@@ -133,7 +140,7 @@ public abstract class MinecraftServerMixin implements SpongeServer, MinecraftSer
             try {
                 this.impl$resourcePack = SpongeResourcePack.create(url, hash);
             } catch (final URISyntaxException e) {
-                e.printStackTrace();
+                MinecraftServerMixin.LOGGER.error("Invalid resource pack url", e);
             }
         }
     }
@@ -145,11 +152,6 @@ public abstract class MinecraftServerMixin implements SpongeServer, MinecraftSer
 
     @Inject(method = "tickServer", at = @At(value = "HEAD"))
     private void impl$onServerTickStart(final CallbackInfo ci) {
-        TimingsManager.FULL_SERVER_TICK.startTiming();
-    }
-
-    @Inject(method = "tickServer", at = @At("TAIL"))
-    private void impl$tickServerScheduler(final BooleanSupplier hasTimeLeft, final CallbackInfo ci) {
         this.scheduler().tick();
     }
 
@@ -167,30 +169,12 @@ public abstract class MinecraftServerMixin implements SpongeServer, MinecraftSer
         frame.pushCause(Sponge.systemSubject());
     }
 
-    // We want to save the username cache json, as we normally bypass it.
-    @Inject(method = "saveAllChunks", at = @At("RETURN"))
-    private void impl$saveUsernameCacheOnSave(
-            final boolean suppressLog,
-            final boolean flush,
-            final boolean forced,
-            final CallbackInfoReturnable<Boolean> cir) {
-        ((GameProfileCacheBridge) this.profileCache).bridge$setCanSave(true);
-        this.profileCache.save();
-        ((GameProfileCacheBridge) this.profileCache).bridge$setCanSave(false);
-    }
-
-    /**
-     * @author Zidane
-     * @reason Apply our branding
-     */
-    @Overwrite
-    public String getServerModName() {
-        return "sponge";
-    }
-
-    @Inject(method = "tickServer", at = @At(value = "RETURN"))
-    private void impl$completeTickCheckAnimation(final CallbackInfo ci) {
-        TimingsManager.FULL_SERVER_TICK.stopTiming();
+    @Inject(method = "stopServer", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;saveAllChunks(ZZZ)Z"))
+    private void impl$callUnloadWorldEvents(final CallbackInfo ci) {
+        for(ServerLevel level : this.shadow$getAllLevels()) {
+            final UnloadWorldEvent unloadWorldEvent = SpongeEventFactory.createUnloadWorldEvent(PhaseTracker.getCauseStackManager().currentCause(), (ServerWorld) level);
+            SpongeCommon.post(unloadWorldEvent);
+        }
     }
 
     @Inject(method = "stopServer", at = @At(value = "TAIL"))
@@ -203,10 +187,21 @@ public abstract class MinecraftServerMixin implements SpongeServer, MinecraftSer
             final LevelStorageSource.LevelStorageAccess levelSave = ((ServerLevelBridge) entry.getValue()).bridge$getLevelSave();
             try {
                 levelSave.close();
-            } catch (IOException e) {
-                LOGGER.error("Failed to unlock level {}", levelSave.getLevelId(), e);
+            } catch (final IOException e) {
+                MinecraftServerMixin.LOGGER.error("Failed to unlock level {}", levelSave.getLevelId(), e);
             }
         }
+    }
+
+    /**
+     * Render localized/formatted chat components
+     *
+     * @param input original component
+     */
+    @Inject(method = "sendMessage", at = @At("HEAD"), cancellable = true)
+    private void impl$useTranslatingLogger(final Component input, final UUID sender, final CallbackInfo ci) {
+        MinecraftServerMixin.LOGGER.info(input);
+        ci.cancel();
     }
 
     @ModifyConstant(method = "tickServer", constant = @Constant(intValue = 6000, ordinal = 0))
@@ -223,9 +218,7 @@ public abstract class MinecraftServerMixin implements SpongeServer, MinecraftSer
             this.shadow$getPlayerList().saveAll();
         }
 
-        try (Timing timing = SpongeTimings.worldSaveTimer.startTiming()) {
-            this.saveAllChunks(true, false, false);
-        }
+        this.saveAllChunks(true, false, false);
 
         // force check to fail as we handle everything above
         return this.tickCount + 1;
@@ -237,70 +230,71 @@ public abstract class MinecraftServerMixin implements SpongeServer, MinecraftSer
      */
     @Overwrite
     public boolean saveAllChunks(final boolean suppressLog, final boolean flush, final boolean isForced) {
+        boolean var0 = false;
+
         for (final ServerLevel world : this.shadow$getAllLevels()) {
             final SerializationBehavior serializationBehavior = ((PrimaryLevelDataBridge) world.getLevelData()).bridge$serializationBehavior().orElse(SerializationBehavior.AUTOMATIC);
-            boolean log = !suppressLog;
+            final InheritableConfigHandle<WorldConfig> adapter = ((PrimaryLevelDataBridge) world.getLevelData()).bridge$configAdapter();
 
-            // Not forced happens during ticks and when shutting down
-            if (!isForced) {
-                final InheritableConfigHandle<WorldConfig> adapter = ((PrimaryLevelDataBridge) world.getLevelData()).bridge$configAdapter();
+            // Sponge start - use our own config
+            boolean log = adapter.get().world.logAutoSave;
+
+            // If the server isn't running or we hit Vanilla's save interval or this was triggered
+            // by a command, save our configs
+            if (!this.shadow$isRunning() || this.tickCount % 6000 == 0 || isForced) {
+                ((PrimaryLevelDataBridge) world.getLevelData()).bridge$configAdapter().save();
+            }
+
+            final boolean canSaveAtAll = serializationBehavior != SerializationBehavior.NONE;
+
+            // This world is set to not save of any time, no reason to check the auto-save/etc, skip it
+            if (!canSaveAtAll) {
+                continue;
+            }
+
+            // Only run auto-save skipping if the server is still running and the save is not forced
+            if (this.bridge$performAutosaveChecks() && !isForced) {
                 final int autoSaveInterval = adapter.get().world.autoSaveInterval;
-                if (log) {
-                    if (this.bridge$performAutosaveChecks()) {
-                        log = adapter.get().world.logAutoSave;
-                    }
-                }
 
-                // Not forced means this is an auto-save or a shut down, handle accordingly
-
-                // If the server isn't running or we hit Vanilla's save interval, save our configs
-                if (!this.shadow$isRunning() || this.tickCount % 6000 == 0) {
-                    ((PrimaryLevelDataBridge) world.getLevelData()).bridge$configAdapter().save();
-                }
-
-                final boolean canSaveAtAll = serializationBehavior != SerializationBehavior.NONE;
-
-                // This world is set to not save of any time, no reason to check the auto-save/etc, skip it
-                if (!canSaveAtAll) {
+                // Do not process properties or chunks if the world is not set to do so unless the server is shutting down
+                if (autoSaveInterval <= 0 || serializationBehavior != SerializationBehavior.AUTOMATIC) {
                     continue;
                 }
 
-                // Only run auto-save skipping if the server is still running
-                if (this.bridge$performAutosaveChecks()) {
-
-                    // Do not process properties or chunks if the world is not set to do so unless the server is shutting down
-                    if (autoSaveInterval <= 0 || serializationBehavior != SerializationBehavior.AUTOMATIC) {
-                        continue;
-                    }
-
-                    // Now check the interval vs the tick counter and skip it
-                    if (this.tickCount % autoSaveInterval != 0) {
-                        continue;
-                    }
+                // Now check the interval vs the tick counter and skip it
+                if (this.tickCount % autoSaveInterval != 0) {
+                    continue;
                 }
-
-                world.save(null, false, world.noSave);
-
-                if (log) {
-                    if (this.bridge$performAutosaveChecks()) {
-                        MinecraftServerMixin.LOGGER.info("Auto-saving data for world '{}'", ((org.spongepowered.api.world.server.ServerWorld) world).key());
-                    } else {
-                        MinecraftServerMixin.LOGGER.info("Saving data for world '{}'", ((org.spongepowered.api.world.server.ServerWorld) world).key());
-                    }
-                }
-            // Forced happens during command
-            } else {
-                if (log) {
-                    MinecraftServerMixin.LOGGER.info("Manually saving data for world '{}'", ((org.spongepowered.api.world.server.ServerWorld) world).key());
-                }
-
-                ((PrimaryLevelDataBridge) world.getLevelData()).bridge$configAdapter().save();
-
-                world.save(null, false, world.noSave);
             }
+            // Sponge end
+
+            if (log) {
+                LOGGER.info("Saving chunks for level '{}'/{}", world, world.dimension().location());
+            }
+
+            world.save((ProgressListener)null, flush, world.noSave && !isForced);
+            var0 = true;
         }
 
-        return true;
+        // Sponge start - We do per-world WorldInfo/WorldBorders/BossBars
+//        ServerLevel var2 = this.overworld();
+//        ServerLevelData var3 = this.worldData.overworldData();
+//        var3.setWorldBorder(var2.getWorldBorder().createSettings());
+//        this.worldData.setCustomBossEvents(this.getCustomBossEvents().save());
+//        this.storageSource.saveDataTag(this.registryHolder, this.worldData, this.shadow$getPlayerList().getSingleplayerData());
+        // Sponge end
+
+        // Sponge start
+        // Save the usercache.json file every 10 minutes or if forced to
+        if (isForced || this.tickCount % 6000 == 0) {
+            // We want to save the username cache json, as we normally bypass it.
+            ((GameProfileCacheBridge) this.profileCache).bridge$setCanSave(true);
+            this.profileCache.save();
+            ((GameProfileCacheBridge) this.profileCache).bridge$setCanSave(false);
+        }
+        // Sponge end
+
+        return var0;
     }
 
     /**
@@ -344,13 +338,13 @@ public abstract class MinecraftServerMixin implements SpongeServer, MinecraftSer
     }
 
     @Inject(method = "reloadResources", at = @At(value = "HEAD"))
-    public void impl$reloadResources(Collection<String> datapacksToLoad, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
+    public void impl$reloadResources(final Collection<String> datapacksToLoad, final CallbackInfoReturnable<CompletableFuture<Void>> cir) {
         SpongeDataPackManager.INSTANCE.callRegisterDataPackValueEvents(this.storageSource.getLevelPath(LevelResource.DATAPACK_DIR), datapacksToLoad);
         this.shadow$getPackRepository().reload();
     }
 
     @Inject(method = "reloadResources", at = @At(value = "RETURN"))
-    public void impl$serializeDelayedDataPack(Collection<String> datapacksToLoad, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
+    public void impl$serializeDelayedDataPack(final Collection<String> datapacksToLoad, final CallbackInfoReturnable<CompletableFuture<Void>> cir) {
         cir.getReturnValue().thenAccept(v -> {
             SpongeDataPackManager.INSTANCE.serializeDelayedDataPack(DataPackTypes.WORLD);
         });

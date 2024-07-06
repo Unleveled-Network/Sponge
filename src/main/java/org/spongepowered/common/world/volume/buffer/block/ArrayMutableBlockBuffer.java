@@ -24,6 +24,7 @@
  */
 package org.spongepowered.common.world.volume.buffer.block;
 
+import net.minecraft.core.BlockPos;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
@@ -42,28 +43,28 @@ import org.spongepowered.api.world.volume.stream.VolumeStream;
 import org.spongepowered.common.world.schematic.MutableBimapPalette;
 import org.spongepowered.common.world.volume.SpongeVolumeStream;
 import org.spongepowered.common.world.volume.VolumeStreamUtils;
+import org.spongepowered.math.vector.Vector3d;
 import org.spongepowered.math.vector.Vector3i;
 
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import net.minecraft.core.BlockPos;
 
-public class ArrayMutableBlockBuffer extends AbstractBlockBuffer implements BlockVolume.Mutable<ArrayMutableBlockBuffer> {
+public class ArrayMutableBlockBuffer extends AbstractBlockBuffer implements BlockVolume.Mutable {
 
     private static final BlockState AIR = BlockTypes.AIR.get().defaultState();
 
     private final Palette.Mutable<BlockState, BlockType> palette;
     private final RegistryReference<BlockType> defaultState;
     private BlockBackingData data;
+    private final RegistryHolder registries;
 
     public ArrayMutableBlockBuffer(final Vector3i start, final Vector3i size) {
         this(
             new MutableBimapPalette<>(
                 PaletteTypes.BLOCK_STATE_PALETTE.get(),
-                Sponge.game().registries().registry(RegistryTypes.BLOCK_TYPE),
-                RegistryTypes.BLOCK_TYPE
+                Sponge.game().registry(RegistryTypes.BLOCK_TYPE)
             ),
             BlockTypes.AIR,
             start,
@@ -75,7 +76,7 @@ public class ArrayMutableBlockBuffer extends AbstractBlockBuffer implements Bloc
         final Vector3i start, final Vector3i size
     ) {
         super(start, size);
-        final Palette.Mutable<BlockState, BlockType> mutablePalette = palette.asMutable(Sponge.game().registries());
+        final Palette.Mutable<BlockState, BlockType> mutablePalette = palette.asMutable(Sponge.game());
         this.palette = mutablePalette;
         final int airId = mutablePalette.orAssign(ArrayMutableBlockBuffer.AIR);
 
@@ -89,13 +90,15 @@ public class ArrayMutableBlockBuffer extends AbstractBlockBuffer implements Bloc
                 this.data.set(i, airId);
             }
         }
+        this.registries = Sponge.game();
     }
 
     public ArrayMutableBlockBuffer(final Palette<BlockState, BlockType> palette, final Vector3i start, final Vector3i size, final char[] blocks) {
         super(start, size);
-        this.palette = palette.asMutable(Sponge.game().registries());
+        this.palette = palette.asMutable(Sponge.game());
         this.data = new BlockBackingData.CharBackingData(blocks);
         this.defaultState = BlockTypes.AIR;
+        this.registries = Sponge.game();
     }
 
     /**
@@ -108,9 +111,10 @@ public class ArrayMutableBlockBuffer extends AbstractBlockBuffer implements Bloc
      */
     ArrayMutableBlockBuffer(final Palette<BlockState, BlockType> palette, final BlockBackingData blocks, final Vector3i start, final Vector3i size) {
         super(start, size);
-        this.palette = palette.asMutable(Sponge.game().registries());
+        this.palette = palette.asMutable(Sponge.game());
         this.data = blocks;
         this.defaultState = BlockTypes.AIR;
+        this.registries = Sponge.game();
     }
 
     @Override
@@ -145,9 +149,9 @@ public class ArrayMutableBlockBuffer extends AbstractBlockBuffer implements Bloc
     @Override
     public BlockState block(final int x, final int y, final int z) {
         this.checkRange(x, y, z);
-        final RegistryHolder registries = Sponge.game().registries();
-        return this.palette.get(this.data.get(this.getIndex(x, y, z)), registries)
-            .orElseGet(() -> this.defaultState.get(registries).defaultState());
+        final int id = this.data.get(this.getIndex(x, y, z));
+        return this.palette.get(id, this.registries)
+            .orElseGet(() -> this.defaultState.get(this.registries).defaultState());
     }
 
     @Override
@@ -186,20 +190,18 @@ public class ArrayMutableBlockBuffer extends AbstractBlockBuffer implements Bloc
     }
 
     @Override
-    public VolumeStream<ArrayMutableBlockBuffer, BlockState> blockStateStream(final Vector3i min, final Vector3i max, final StreamOptions options) {
-        final Vector3i blockMin = this.blockMin();
-        final Vector3i blockMax = this.blockMax();
-        VolumeStreamUtils.validateStreamArgs(min, max, blockMin, blockMax, options);
+    public VolumeStream<BlockVolume.Mutable, BlockState> blockStateStream(final Vector3i min, final Vector3i max, final StreamOptions options) {
+        VolumeStreamUtils.validateStreamArgs(min, max, this.min(), this.max(), options);
         final ArrayMutableBlockBuffer buffer;
         if (options.carbonCopy()) {
-            buffer = new ArrayMutableBlockBuffer(this.palette, this.data.copyOf(), this.start, this.size);
+            buffer = copy();
         } else {
             buffer = this;
         }
-        final Stream<VolumeElement<ArrayMutableBlockBuffer, BlockState>> stateStream = IntStream.range(blockMin.x(), blockMax.x() + 1)
-            .mapToObj(x -> IntStream.range(blockMin.z(), blockMax.z() + 1)
-                .mapToObj(z -> IntStream.range(blockMin.y(), blockMax.y() + 1)
-                    .mapToObj(y -> VolumeElement.of(this, () -> buffer.block(x, y, z), new Vector3i(x, y, z)))
+        final Stream<VolumeElement<BlockVolume.Mutable, BlockState>> stateStream = IntStream.range(min.x(), max.x() + 1)
+            .mapToObj(x -> IntStream.range(min.z(), max.z() + 1)
+                .mapToObj(z -> IntStream.range(min.y(), max.y() + 1)
+                    .mapToObj(y -> VolumeElement.of((BlockVolume.Mutable) this, () -> buffer.block(x, y, z), new Vector3d(x, y, z)))
                 ).flatMap(Function.identity())
             ).flatMap(Function.identity());
         return new SpongeVolumeStream<>(stateStream, () -> this);

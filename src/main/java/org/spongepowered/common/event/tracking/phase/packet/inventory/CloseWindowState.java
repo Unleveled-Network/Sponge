@@ -24,68 +24,38 @@
  */
 package org.spongepowered.common.event.tracking.phase.packet.inventory;
 
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.inventory.AbstractContainerMenu;
-import org.spongepowered.api.event.CauseStackManager;
-import org.spongepowered.api.event.EventContextKeys;
+import com.google.common.collect.ImmutableList;
+import net.minecraft.world.entity.Entity;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.spongepowered.api.event.Cause;
+import org.spongepowered.api.event.SpongeEventFactory;
+import org.spongepowered.api.event.cause.entity.SpawnType;
 import org.spongepowered.api.event.cause.entity.SpawnTypes;
-import org.spongepowered.api.event.item.inventory.container.InteractContainerEvent;
-import org.spongepowered.api.item.inventory.ItemStackSnapshot;
-import org.spongepowered.common.event.SpongeCommonEventFactory;
-import org.spongepowered.common.event.tracking.PhaseTracker;
-import org.spongepowered.common.event.tracking.TrackingUtil;
+import org.spongepowered.api.event.entity.SpawnEntityEvent;
+import org.spongepowered.api.util.Tuple;
+import org.spongepowered.common.event.tracking.context.transaction.GameTransaction;
+import org.spongepowered.common.event.tracking.context.transaction.world.SpawnEntityTransaction;
 import org.spongepowered.common.event.tracking.phase.packet.BasicPacketContext;
 import org.spongepowered.common.event.tracking.phase.packet.BasicPacketState;
-import org.spongepowered.common.item.util.ItemStackUtil;
+
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 public final class CloseWindowState extends BasicPacketState {
 
     @Override
-    public void populateContext(ServerPlayer playerMP, Packet<?> packet, BasicPacketContext context) {
-        context.openContainer(playerMP.containerMenu);
+    public Supplier<SpawnType> getSpawnTypeForTransaction(final BasicPacketContext context, final Entity entityToSpawn) {
+        return SpawnTypes.DROPPED_ITEM;
     }
 
     @Override
-    public void unwind(BasicPacketContext context) {
-        final ServerPlayer player = context.getSource(ServerPlayer.class).get();
-        final AbstractContainerMenu container = context.getOpenContainer();
-        ItemStackSnapshot lastCursor = context.getCursor();
-        ItemStackSnapshot newCursor = ItemStackUtil.snapshotOf(player.inventory.getCarried());
-        final CauseStackManager stackManager = PhaseTracker.getCauseStackManager();
-        if (lastCursor != null) {
-            stackManager.pushCause(player);
-            InteractContainerEvent.Close event =
-                    SpongeCommonEventFactory.callInteractInventoryCloseEvent(container, player, lastCursor, newCursor, true);
-            if (event.isCancelled()) {
-                stackManager.popCause();
-                return;
-            }
-            stackManager.popCause();
-        }
-
-        if (context.getTransactor().isEmpty()) {
-            return;
-        }
-
-        try (CauseStackManager.StackFrame frame = stackManager.pushCauseFrame()) {
-            frame.pushCause(player);
-            frame.addContext(EventContextKeys.SPAWN_TYPE, SpawnTypes.DROPPED_ITEM);
-            // items
-//            context.getCapturedItemsSupplier().acceptAndClearIfNotEmpty(items -> {
-//                final List<Entity> entities = items
-//                    .stream()
-//                    .map(entity -> (Entity) entity)
-//                    .collect(Collectors.toList());
-//                if (!entities.isEmpty()) {
-//                    SpongeCommonEventFactory.callDropItemClose(entities, context, () -> Optional.of(((ServerPlayer) player).user()));
-//                }
-//            });
-        }
-        // TODO - Determine if we need to pass the supplier or perform some parameterized
-        //  process if not empty method on the capture object.
-        TrackingUtil.processBlockCaptures(context);
-
+    public SpawnEntityEvent createSpawnEvent(final BasicPacketContext context, final @Nullable GameTransaction<@NonNull ?> parent,
+            final ImmutableList<Tuple<Entity, SpawnEntityTransaction.DummySnapshot>> collect, final Cause currentCause) {
+        return SpongeEventFactory.createDropItemEventClose(currentCause,
+                collect.stream()
+                        .map(t -> (org.spongepowered.api.entity.Entity) t.first())
+                        .collect(Collectors.toList())
+        );
     }
-
 }

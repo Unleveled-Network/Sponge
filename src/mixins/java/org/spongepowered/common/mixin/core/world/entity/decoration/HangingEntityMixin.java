@@ -24,6 +24,8 @@
  */
 package org.spongepowered.common.mixin.core.world.entity.decoration;
 
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.decoration.HangingEntity;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.event.SpongeEventFactory;
@@ -37,9 +39,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.common.SpongeCommon;
 import org.spongepowered.common.event.tracking.PhaseTracker;
 import org.spongepowered.common.mixin.core.world.entity.EntityMixin;
+
 import java.util.ArrayList;
-import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.entity.decoration.HangingEntity;
 
 @Mixin(HangingEntity.class)
 public abstract class HangingEntityMixin extends EntityMixin {
@@ -79,27 +80,4 @@ public abstract class HangingEntityMixin extends EntityMixin {
         }
     }
 
-    /**
-     * @author gabizou - April 19th, 2018
-     * @reason Redirect the flow of logic to sponge for events and captures. Forge's compatibility is built in
-     * to the implementation.
-     */
-    /*
-    @Override
-    @Overwrite
-    public ItemEntity entityDropItem(final ItemStack stack, final float offsetY) {
-        // Sponge Start - Check for client worlds,, don't care about them really. If it's server world, then we care.
-        final double xOffset = ((float) this.facingDirection.getXOffset() * 0.15F);
-        final double zOffset = ((float) this.facingDirection.getZOffset() * 0.15F);
-        if (((WorldBridge) this.world).bridge$isFake()) {
-            // Sponge End
-            final ItemEntity entityitem = new ItemEntity(this.world, this.posX + xOffset, this.posY + (double) offsetY, this.posZ + zOffset, stack);
-            entityitem.setDefaultPickupDelay();
-            this.world.addEntity(entityitem);
-            return entityitem;
-        }
-        // Sponge - redirect server sided logic to sponge to handle cause stacks and phase states
-        return EntityUtil.entityOnDropItem((HangingEntity) (Object) this, stack, offsetY, this.posX + xOffset, this.posZ + zOffset);
-    }
-*/
 }

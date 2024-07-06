@@ -78,7 +78,7 @@ public final class SpongeEndStyleBiomeConfig extends AbstractBiomeProviderConfig
     public RegistryReference<Biome> barrensBiome() {
         return this.barrensBiome;
     }
-    
+
     public static final class BuilderImpl implements Builder {
 
         public long seed;
@@ -133,7 +133,7 @@ public final class SpongeEndStyleBiomeConfig extends AbstractBiomeProviderConfig
 
         @Override
         public Builder reset() {
-            this.seed = BootstrapProperties.dimensionGeneratorSettings.seed();
+            this.seed = BootstrapProperties.worldGenSettings.seed();
             this.endBiome = Biomes.THE_END;
             this.highlandsBiome = Biomes.END_HIGHLANDS;
             this.midlandsBiome = Biomes.END_MIDLANDS;

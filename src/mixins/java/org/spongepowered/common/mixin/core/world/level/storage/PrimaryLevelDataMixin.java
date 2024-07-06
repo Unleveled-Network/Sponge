@@ -82,7 +82,6 @@ import org.spongepowered.common.util.VecHelper;
 import org.spongepowered.common.world.server.SpongeWorldManager;
 import org.spongepowered.math.vector.Vector3i;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -100,9 +99,8 @@ public abstract class PrimaryLevelDataMixin implements WorldData, PrimaryLevelDa
     @Shadow private float spawnAngle;
 
     @Shadow public abstract boolean shadow$isDifficultyLocked();
-    @Shadow public abstract void setSpawn(BlockPos p_176143_1_, float p_176143_2_);
+    @Shadow public abstract void shadow$setSpawn(BlockPos p_176143_1_, float p_176143_2_);
     // @formatter:on
-
 
     @Nullable private ResourceKey impl$key;
     private DimensionType impl$dimensionType;
@@ -114,11 +112,9 @@ public abstract class PrimaryLevelDataMixin implements WorldData, PrimaryLevelDa
     private InheritableConfigHandle<WorldConfig> impl$configAdapter;
 
     private final BiMap<Integer, UUID> impl$playerUniqueIdMap = HashBiMap.create();
-    private final List<UUID> impl$pendingUniqueIds = new ArrayList<>();
-    private int impl$trackedUniqueIdCount = 0;
 
     private boolean impl$customDifficulty = false, impl$customGameType = false, impl$customSpawnPosition = false, impl$loadOnStartup,
-        impl$performsSpawnLogic;
+            impl$performsSpawnLogic;
 
     private BiMap<Integer, UUID> impl$mapUUIDIndex = HashBiMap.create();
 
@@ -278,10 +274,10 @@ public abstract class PrimaryLevelDataMixin implements WorldData, PrimaryLevelDa
     }
 
     @Override
-    public void bridge$populateFromDimension(final LevelStem dimension) {
-        final LevelStemBridge levelStemBridge = (LevelStemBridge) (Object) dimension;
-        this.impl$key = ((ResourceKeyBridge) (Object) dimension).bridge$getKey();
-        this.impl$dimensionType = dimension.type();
+    public void bridge$populateFromDimension(final LevelStem stem) {
+        final LevelStemBridge levelStemBridge = (LevelStemBridge) (Object) stem;
+        this.impl$key = ((ResourceKeyBridge) (Object) stem).bridge$getKey();
+        this.impl$dimensionType = stem.type();
         this.impl$displayName = levelStemBridge.bridge$displayName().orElse(null);
         levelStemBridge.bridge$difficulty().ifPresent(v -> {
             ((LevelSettingsAccessor) (Object) this.settings).accessor$difficulty(RegistryTypes.DIFFICULTY.get().value((ResourceKey) (Object) v));
@@ -292,7 +288,7 @@ public abstract class PrimaryLevelDataMixin implements WorldData, PrimaryLevelDa
             this.impl$customGameType = true;
         });
         levelStemBridge.bridge$spawnPosition().ifPresent(v -> {
-            this.setSpawn(VecHelper.toBlockPos(v), this.spawnAngle);
+            this.shadow$setSpawn(VecHelper.toBlockPos(v), this.spawnAngle);
             this.impl$customSpawnPosition = true;
         });
         levelStemBridge.bridge$hardcore().ifPresent(v -> ((LevelSettingsAccessor) (Object) this.settings).accessor$hardcode(v));
@@ -314,15 +310,15 @@ public abstract class PrimaryLevelDataMixin implements WorldData, PrimaryLevelDa
     }
 
     @Override
-    public int bridge$getIndexForUniqueId(UUID uuid) {
+    public int bridge$getIndexForUniqueId(final UUID uuid) {
         final Integer index = this.impl$playerUniqueIdMap.inverse().get(uuid);
         if (index != null) {
             return index;
         }
 
-        this.impl$playerUniqueIdMap.put(this.impl$trackedUniqueIdCount, uuid);
-        this.impl$pendingUniqueIds.add(uuid);
-        return this.impl$trackedUniqueIdCount++;
+        final int newIndex = this.impl$playerUniqueIdMap.size();
+        this.impl$playerUniqueIdMap.put(newIndex, uuid);
+        return newIndex;
     }
 
     @Override
@@ -339,7 +335,7 @@ public abstract class PrimaryLevelDataMixin implements WorldData, PrimaryLevelDa
         return (ServerLevelData) SpongeCommon.server().getLevel(Level.OVERWORLD).getLevelData();
     }
 
-    @Redirect(method = "setTagData", at = @At(value = "INVOKE", target = "Lcom/mojang/serialization/Codec;encodeStart(Lcom/mojang/serialization/DynamicOps;Ljava/lang/Object;)Lcom/mojang/serialization/DataResult;", ordinal = 0))
+    @Redirect(method = "setTagData", at = @At(value = "INVOKE", remap = false, target = "Lcom/mojang/serialization/Codec;encodeStart(Lcom/mojang/serialization/DynamicOps;Ljava/lang/Object;)Lcom/mojang/serialization/DataResult;", ordinal = 0))
     private DataResult<Object> impl$ignorePluginDimensionsWhenWritingWorldGenSettings(final Codec codec, final DynamicOps<Object> ops, final Object input) {
         WorldGenSettings dimensionGeneratorSettings = (WorldGenSettings) input;
         // Sub levels will have an empty dimensions registry so it is an easy toggle off
@@ -378,7 +374,7 @@ public abstract class PrimaryLevelDataMixin implements WorldData, PrimaryLevelDa
 
     @Override
     @SuppressWarnings("deprecated")
-    public void bridge$readSpongeLevelData(Dynamic<Tag> dynamic) {
+    public void bridge$readSpongeLevelData(final Dynamic<Tag> dynamic) {
         if (dynamic == null) {
             this.bridge$setUniqueId(UUID.randomUUID());
             return;
@@ -397,12 +393,7 @@ public abstract class PrimaryLevelDataMixin implements WorldData, PrimaryLevelDa
         // TODO Move this to Schema
         dynamic.get(Constants.Sponge.LEGACY_SPONGE_PLAYER_UUID_TABLE).readList(LegacyUUIDCodec.CODEC).result().orElseGet(() ->
             dynamic.get(Constants.Sponge.SPONGE_PLAYER_UUID_TABLE).readList(SerializableUUID.CODEC).result().orElse(Collections.emptyList())
-        ).forEach(uuid -> {
-            final Integer playerIndex = this.impl$playerUniqueIdMap.inverse().get(uuid);
-            if (playerIndex == null) {
-                this.impl$playerUniqueIdMap.put(this.impl$trackedUniqueIdCount++, uuid);
-            }
-        });
+        ).forEach(uuid -> this.impl$playerUniqueIdMap.inverse().putIfAbsent(uuid, this.impl$playerUniqueIdMap.size()));
     }
 
     @Override
@@ -417,8 +408,7 @@ public abstract class PrimaryLevelDataMixin implements WorldData, PrimaryLevelDa
 
         final ListTag playerIdList = new ListTag();
         data.put(Constants.Sponge.SPONGE_PLAYER_UUID_TABLE, playerIdList);
-        this.impl$pendingUniqueIds.forEach(uuid -> playerIdList.add(new IntArrayTag(SerializableUUID.uuidToIntArray(uuid))));
-        this.impl$pendingUniqueIds.clear();
+        this.impl$playerUniqueIdMap.values().forEach(uuid -> playerIdList.add(new IntArrayTag(SerializableUUID.uuidToIntArray(uuid))));
 
         return data;
     }

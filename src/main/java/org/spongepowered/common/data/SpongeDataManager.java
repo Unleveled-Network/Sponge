@@ -24,6 +24,7 @@
  */
 package org.spongepowered.common.data;
 
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.MapMaker;
 import com.google.inject.Inject;
@@ -48,8 +49,12 @@ import org.spongepowered.api.data.persistence.DataStore;
 import org.spongepowered.api.data.persistence.DataTranslator;
 import org.spongepowered.api.data.persistence.DataView;
 import org.spongepowered.api.data.value.Value;
+import org.spongepowered.api.effect.particle.ParticleOption;
+import org.spongepowered.api.effect.particle.ParticleType;
+import org.spongepowered.api.effect.potion.PotionEffectType;
 import org.spongepowered.api.entity.EntityArchetype;
 import org.spongepowered.api.entity.EntitySnapshot;
+import org.spongepowered.api.event.EventListenerRegistration;
 import org.spongepowered.api.event.data.ChangeDataHolderEvent;
 import org.spongepowered.api.item.ItemType;
 import org.spongepowered.api.item.inventory.ItemStack;
@@ -60,17 +65,27 @@ import org.spongepowered.api.profile.GameProfile;
 import org.spongepowered.api.profile.property.ProfileProperty;
 import org.spongepowered.api.registry.RegistryType;
 import org.spongepowered.api.registry.RegistryTypes;
+import org.spongepowered.api.util.Color;
 import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.common.SpongeCommon;
 import org.spongepowered.common.block.SpongeBlockStateBuilder;
 import org.spongepowered.common.data.builder.item.SpongeItemStackSnapshotDataBuilder;
+import org.spongepowered.common.data.datasync.entity.EntityBabyConverter;
+import org.spongepowered.common.data.datasync.entity.EntityCustomNameConverter;
+import org.spongepowered.common.data.datasync.entity.EntityCustomNameVisibleConverter;
+import org.spongepowered.common.data.datasync.entity.EntityFlagsConverter;
+import org.spongepowered.common.data.datasync.entity.EntityNoGravityConverter;
+import org.spongepowered.common.data.datasync.entity.EntitySilentConverter;
+import org.spongepowered.common.data.datasync.entity.LivingEntityArrowCountConverter;
+import org.spongepowered.common.data.datasync.entity.LivingHealthConverter;
+import org.spongepowered.common.data.datasync.entity.MobEntityAIFlagsConverter;
 import org.spongepowered.common.data.key.KeyBasedDataListener;
 import org.spongepowered.common.data.persistence.datastore.DataStoreRegistry;
 import org.spongepowered.common.data.provider.CustomDataProvider;
 import org.spongepowered.common.data.provider.DataProviderRegistry;
 import org.spongepowered.common.entity.SpongeEntityArchetypeBuilder;
 import org.spongepowered.common.entity.SpongeEntitySnapshotBuilder;
-import org.spongepowered.common.item.SpongeItemStackBuilder;
+import org.spongepowered.common.item.SpongeItemStack;
 import org.spongepowered.common.map.canvas.SpongeMapCanvasDataBuilder;
 import org.spongepowered.common.map.decoration.SpongeMapDecorationDataBuilder;
 import org.spongepowered.common.profile.SpongeGameProfileDataBuilder;
@@ -92,7 +107,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-
 
 @Singleton
 public final class SpongeDataManager implements DataManager {
@@ -184,12 +198,12 @@ public final class SpongeDataManager implements DataManager {
                 builder.add(updater);
             }
         }
-        if (version < toVersion || version > toVersion) { // There wasn't a registered updater for the version being requested
-            final Exception e = new IllegalStateException("The requested content version for: " + clazz.getSimpleName() + " was requested, "
-                                                    + "\nhowever, the versions supplied: from "+ fromVersion + " to " + toVersion + " is impossible"
-                                                    + "\nas the latest version registered is: " + version+". Please notify the developer of"
-                                                    + "\nthe requested consumed DataSerializable of this error.");
-            e.printStackTrace();
+        if (version < fromVersion || version > toVersion) { // There wasn't a registered updater for the version being requested
+            SpongeCommon.logger().warn("The requested content version for: {} was requested, "
+                                       + "\nhowever, the versions supplied: from {} to {} is impossible"
+                                       + "\nas the latest version registered is: {}. Please notify the developer of"
+                                       + "\nthe requested consumed DataSerializable of this error.",
+                    clazz.getSimpleName(), fromVersion, toVersion, version);
             return Optional.empty();
         }
         return Optional.of(new DataUpdaterDelegate(builder.build(), fromVersion, toVersion));
@@ -233,13 +247,22 @@ public final class SpongeDataManager implements DataManager {
         return DataTranslatorProvider.INSTANCE.getSerializer(objectClass);
     }
 
+    @Override
+    public <T> void registerTranslator(final Class<T> objectClass, final DataTranslator<T> translator) {
+        DataTranslatorProvider.INSTANCE.register(objectClass, translator);
+    }
+
     public void registerKeyListeners() {
         this.keyListeners.forEach(this::registerKeyListener0);
         this.keyListeners.clear();
     }
 
     private void registerKeyListener0(final KeyBasedDataListener<?> listener) {
-        Sponge.eventManager().registerListener(listener.getOwner(), ChangeDataHolderEvent.ValueChange.class, listener);
+        Sponge.eventManager().registerListener(EventListenerRegistration.builder(ChangeDataHolderEvent.ValueChange.class)
+            .plugin(listener.getOwner())
+            .listener(listener)
+            .build()
+        );
     }
 
     @Override
@@ -316,6 +339,15 @@ public final class SpongeDataManager implements DataManager {
 
     public void registerDefaultProviders() {
         this.dataProviderRegistry.registerDefaultProviders();
+        new EntityBabyConverter();
+        new EntityCustomNameConverter();
+        new EntityCustomNameVisibleConverter();
+        new EntityFlagsConverter();
+        new EntityNoGravityConverter();
+        new EntitySilentConverter();
+        new LivingEntityArrowCountConverter();
+        new LivingHealthConverter();
+        new MobEntityAIFlagsConverter();
 
     }
 
@@ -328,10 +360,10 @@ public final class SpongeDataManager implements DataManager {
     }
 
     public void registerDefaultBuilders() {
-        this.registerBuilder(ItemStack.class, new SpongeItemStackBuilder());
+        this.registerBuilder(ItemStack.class, new SpongeItemStack.BuilderImpl());
         this.registerBuilder(ItemStackSnapshot.class, new SpongeItemStackSnapshotDataBuilder());
         this.registerBuilder(EntitySnapshot.class, new SpongeEntitySnapshotBuilder());
-        this.registerBuilder(EntityArchetype.class, new SpongeEntityArchetypeBuilder());
+        this.registerBuilder(EntityArchetype.class, SpongeEntityArchetypeBuilder.unpooled());
         this.registerBuilder(SpongePlayerData.class, new SpongePlayerDataBuilder());
         this.registerBuilder(BlockState.class, new SpongeBlockStateBuilder());
         this.registerBuilder(MapDecoration.class, new SpongeMapDecorationDataBuilder());
@@ -339,6 +371,7 @@ public final class SpongeDataManager implements DataManager {
         this.registerBuilder(ServerLocation.class, new SpongeServerLocationBuilder());
         this.registerBuilder(GameProfile.class, new SpongeGameProfileDataBuilder());
         this.registerBuilder(ProfileProperty.class, new SpongeProfilePropertyDataBuilder());
+        this.registerBuilder(Color.class, new Color.Builder());
     }
 
     public Optional<DataStore> getDataStore(ResourceKey key, Class<? extends DataHolder> typeToken) {
@@ -352,6 +385,9 @@ public final class SpongeDataManager implements DataManager {
         if (this.registryTypeMap == null) {
             this.registryTypeMap = new HashMap<>();
             this.registryTypeMap.put(ItemType.class, RegistryTypes.ITEM_TYPE);
+            this.registryTypeMap.put(ParticleType.class, RegistryTypes.PARTICLE_TYPE);
+            this.registryTypeMap.put(ParticleOption.class, RegistryTypes.PARTICLE_OPTION);
+            this.registryTypeMap.put(PotionEffectType.class, RegistryTypes.POTION_EFFECT_TYPE);
             // TODO add all RegistryTypes that we have global registries for
             // there needs to be a better way to do this
         }

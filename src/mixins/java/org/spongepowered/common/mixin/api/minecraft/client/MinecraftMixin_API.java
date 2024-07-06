@@ -28,15 +28,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.Connection;
-import net.minecraft.util.thread.ReentrantBlockableEventLoop;
+import net.minecraft.server.packs.repository.PackRepository;
 import org.spongepowered.api.Game;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.client.LocalServer;
 import org.spongepowered.api.entity.living.player.client.LocalPlayer;
 import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.network.ClientSideConnection;
-import org.spongepowered.api.registry.RegistryHolder;
-import org.spongepowered.api.registry.RegistryScope;
+import org.spongepowered.api.resource.ResourceManager;
 import org.spongepowered.api.world.client.ClientWorld;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -44,6 +43,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.common.bridge.client.MinecraftBridge;
 import org.spongepowered.common.client.SpongeClient;
 import org.spongepowered.common.event.tracking.PhaseTracker;
+import org.spongepowered.common.registry.RegistryHolderLogic;
 import org.spongepowered.common.registry.SpongeRegistryHolder;
 import org.spongepowered.common.scheduler.ClientScheduler;
 import org.spongepowered.common.util.LocaleCache;
@@ -54,22 +54,21 @@ import java.util.Optional;
 import javax.annotation.Nullable;
 
 @Mixin(Minecraft.class)
-public abstract class MinecraftMixin_API extends ReentrantBlockableEventLoop<Runnable> implements SpongeClient {
+public abstract class MinecraftMixin_API implements SpongeClient, SpongeRegistryHolder {
 
     // @formatter:off
     @Shadow public net.minecraft.client.multiplayer.ClientLevel level;
     @Shadow public net.minecraft.client.player.LocalPlayer player;
     @Shadow @Nullable private Connection pendingConnection;
     @Shadow @Final public Options options;
+
     @Shadow @Nullable public abstract IntegratedServer shadow$getSingleplayerServer();
+    @Shadow public abstract PackRepository shadow$getResourcePackRepository();
+    @Shadow public abstract net.minecraft.server.packs.resources.ResourceManager shadow$getResourceManager();
     // @formatter:on
 
     private final ClientScheduler api$scheduler = new ClientScheduler();
-    private final RegistryHolder api$registryHolder = new SpongeRegistryHolder();
-
-    public MinecraftMixin_API(String name) {
-        super(name);
-    }
+    private final RegistryHolderLogic api$registryHolder = new RegistryHolderLogic();
 
     @Override
     public Optional<LocalPlayer> player() {
@@ -112,23 +111,23 @@ public abstract class MinecraftMixin_API extends ReentrantBlockableEventLoop<Run
     }
 
     @Override
+    public org.spongepowered.api.resource.pack.PackRepository packRepository() {
+        return (org.spongepowered.api.resource.pack.PackRepository) this.shadow$getResourcePackRepository();
+    }
+
+    @Override
+    public ResourceManager resourceManager() {
+        return (ResourceManager) this.shadow$getResourceManager();
+    }
+
+    @Override
     public ClientScheduler scheduler() {
         return this.api$scheduler;
     }
 
     @Override
     public boolean onMainThread() {
-        return this.isSameThread();
-    }
-
-    @Override
-    public RegistryScope registryScope() {
-        return RegistryScope.ENGINE;
-    }
-
-    @Override
-    public RegistryHolder registries() {
-        return this.api$registryHolder;
+        return ((Minecraft) (Object) this).isSameThread();
     }
 
     @Override
@@ -136,4 +135,8 @@ public abstract class MinecraftMixin_API extends ReentrantBlockableEventLoop<Run
         return LocaleCache.getLocale(this.options.languageCode);
     }
 
+    @Override
+    public RegistryHolderLogic registryHolder() {
+        return this.api$registryHolder;
+    }
 }

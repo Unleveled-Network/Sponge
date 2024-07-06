@@ -27,12 +27,18 @@ package org.spongepowered.common.mixin.api.minecraft.world.item;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.ComponentLike;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.event.HoverEventSource;
 import net.minecraft.core.Registry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.item.Item;
+import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jetbrains.annotations.NotNull;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.data.SerializableDataHolder;
 import org.spongepowered.api.data.persistence.DataContainer;
@@ -45,23 +51,30 @@ import org.spongepowered.api.item.ItemType;
 import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.item.inventory.ItemStackSnapshot;
 import org.spongepowered.api.item.inventory.equipment.EquipmentType;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Implements;
 import org.spongepowered.asm.mixin.Interface;
+import org.spongepowered.asm.mixin.Interface.Remap;
 import org.spongepowered.asm.mixin.Intrinsic;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.common.adventure.SpongeAdventure;
 import org.spongepowered.common.data.persistence.NBTTranslator;
 import org.spongepowered.common.hooks.PlatformHooks;
 import org.spongepowered.common.item.SpongeItemStackSnapshot;
 import org.spongepowered.common.util.Constants;
 
 import java.util.Collection;
+import java.util.Objects;
+import java.util.function.UnaryOperator;
 
 @Mixin(net.minecraft.world.item.ItemStack.class)
-@Implements(@Interface(iface = ItemStack.class, prefix = "itemStack$")) // We need to soft implement this interface due to a synthetic bridge method
-public abstract class ItemStackMixin_API implements SerializableDataHolder.Mutable {       // conflict from overriding ValueContainer#copy() from DataHolder
+@Implements(@Interface(iface = ItemStack.class, prefix = "itemStack$", remap = Remap.NONE)) // We need to soft implement this interface due to a synthetic bridge method
+public abstract class ItemStackMixin_API implements SerializableDataHolder.Mutable, ComponentLike, HoverEventSource<HoverEvent.ShowItem> {       // conflict from overriding ValueContainer#copy() from DataHolder
 
     // @formatter:off
+    @Shadow @Final private static Logger LOGGER;
+
     @Shadow public abstract int shadow$getCount();
     @Shadow public abstract void shadow$setCount(int size); // Do not use field directly as Minecraft tracks the empty state
     @Shadow public abstract void shadow$setDamageValue(int meta);
@@ -75,6 +88,8 @@ public abstract class ItemStackMixin_API implements SerializableDataHolder.Mutab
     @Shadow public abstract Item shadow$getItem();
     @Shadow public abstract Multimap<Attribute, net.minecraft.world.entity.ai.attributes.AttributeModifier> shadow$getAttributeModifiers(EquipmentSlot equipmentSlot);
     @Shadow public abstract void shadow$addAttributeModifier(Attribute attribute, net.minecraft.world.entity.ai.attributes.AttributeModifier modifier, @Nullable EquipmentSlot equipmentSlot);
+    @Shadow public abstract String shadow$getDescriptionId();
+    @Shadow public abstract net.minecraft.network.chat.Component shadow$getDisplayName();
     // @formatter:on
 
     public int itemStack$quantity() {
@@ -176,15 +191,10 @@ public abstract class ItemStackMixin_API implements SerializableDataHolder.Mutab
                 container.set(Constants.Sponge.UNSAFE_NBT, unsafeNbt);
             }
         }
-        // We only need to include the custom data, not vanilla manipulators supported by sponge implementation
-//        final Collection<Mutable<?, ?>> manipulators = ((CustomDataHolderBridge) this).bridge$getCustomManipulators();
-//        if (!manipulators.isEmpty()) {
-//            container.set(Constants.Sponge.DATA_MANIPULATORS, DataUtil.getSerializedManipulatorList(manipulators));
-//        }
         try {
             PlatformHooks.INSTANCE.getItemHooks().writeItemStackCapabilitiesToDataView(container, (net.minecraft.world.item.ItemStack) (Object) this);
         } catch (final Exception e) {
-            e.printStackTrace();
+            ItemStackMixin_API.LOGGER.error("Failed to write capabilities to data view", e);
         }
         return container;
     }
@@ -194,7 +204,7 @@ public abstract class ItemStackMixin_API implements SerializableDataHolder.Mutab
     }
 
     public boolean itemStack$equalTo(final ItemStack that) {
-        return net.minecraft.world.item.ItemStack.tagMatches(
+        return net.minecraft.world.item.ItemStack.matches(
                 (net.minecraft.world.item.ItemStack) (Object) this,
                 (net.minecraft.world.item.ItemStack) (Object) that
         );
@@ -203,6 +213,21 @@ public abstract class ItemStackMixin_API implements SerializableDataHolder.Mutab
     @Intrinsic
     public boolean itemStack$isEmpty() {
         return this.shadow$isEmpty();
+    }
+
+    @Override
+    public Component asComponent() {
+        return SpongeAdventure.asAdventure(this.shadow$getDisplayName());
+    }
+
+    @Override
+    public @NotNull HoverEvent<HoverEvent.ShowItem> asHoverEvent(@NotNull final UnaryOperator<HoverEvent.ShowItem> op) {
+        final HoverEvent.ShowItem event = HoverEvent.ShowItem.of(
+            SpongeAdventure.asAdventure(Registry.ITEM.getKey(this.shadow$getItem())),
+            this.shadow$getCount(),
+            SpongeAdventure.asBinaryTagHolder(this.shadow$getTag())
+        );
+        return HoverEvent.showItem(Objects.requireNonNull(op, "op").apply(event));
     }
 
 }

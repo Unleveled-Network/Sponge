@@ -24,12 +24,15 @@
  */
 package org.spongepowered.common.bridge.server.level;
 
-import java.util.Collection;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+
+import java.util.Collection;
 
 public interface ServerPlayerEntityHealthScaleBridge {
 
-    void bridge$setHealthScale(Double scale);
+    boolean bridge$setHealthScale(double scale);
+
+    void bridge$resetHealthScale();
 
     Double bridge$getHealthScale();
 

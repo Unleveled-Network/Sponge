@@ -32,7 +32,6 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.apache.logging.log4j.Level;
 import org.checkerframework.checker.nullness.qual.NonNull;
-
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -41,14 +40,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.Slice;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.spongepowered.asm.util.PrettyPrinter;
 import org.spongepowered.common.SpongeCommon;
 import org.spongepowered.common.applaunch.config.core.SpongeConfigs;
-import org.spongepowered.common.bridge.world.WorldBridge;
+import org.spongepowered.common.bridge.world.level.LevelBridge;
 import org.spongepowered.common.event.tracking.PhaseContext;
 import org.spongepowered.common.event.tracking.PhasePrinter;
 import org.spongepowered.common.event.tracking.PhaseTracker;
 import org.spongepowered.common.event.tracking.phase.generation.GenerationPhase;
+import org.spongepowered.common.util.PrettyPrinter;
 
 @Mixin(ChunkMap.class)
 public abstract class ChunkMapMixin_Tracker {
@@ -104,7 +103,7 @@ public abstract class ChunkMapMixin_Tracker {
     )
     private void tracker$startLoad(final LevelChunk chunk) {
         chunk.runPostLoad();
-        final boolean isFake = ((WorldBridge) chunk.getLevel()).bridge$isFake();
+        final boolean isFake = ((LevelBridge) chunk.getLevel()).bridge$isFake();
         if (isFake) {
             return;
         }
@@ -132,7 +131,7 @@ public abstract class ChunkMapMixin_Tracker {
     }
 
     @Inject(method = "*",
-        at = @At(value = "INVOKE", target = "Ljava/util/List;forEach(Ljava/util/function/Consumer;)V", shift = At.Shift.BY, by = 2),
+        at = @At(value = "INVOKE", remap = false, target = "Ljava/util/List;forEach(Ljava/util/function/Consumer;)V", shift = At.Shift.BY, by = 2),
         slice = @Slice(
             from = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/chunk/LevelChunk;runPostLoad()V")
         ),
@@ -140,7 +139,7 @@ public abstract class ChunkMapMixin_Tracker {
         require = 1
     )
     private void tracker$endLoad(final ChunkHolder chunkHolder, final ChunkAccess chunk, final CallbackInfoReturnable<ChunkAccess> cir) {
-        if (!((WorldBridge) this.level).bridge$isFake() && PhaseTracker.SERVER.onSidedThread()) {
+        if (!((LevelBridge) this.level).bridge$isFake() && PhaseTracker.SERVER.onSidedThread()) {
             if (PhaseTracker.getInstance().getCurrentState() == GenerationPhase.State.CHUNK_REGENERATING_LOAD_EXISTING) {
                 return;
             }

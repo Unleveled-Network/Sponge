@@ -58,7 +58,9 @@ public final class ServerPlayerData {
                 .asMutable(ServerPlayer.class)
                     .create(Keys.GAME_MODE)
                         .get(h -> (GameMode) (Object) h.gameMode.getGameModeForPlayer())
-                        .set((h, v) -> h.setGameMode((GameType) (Object) v))
+                        .set((h, v) -> ((ServerPlayerBridge) h).bridge$setGameModeNoEvent((GameType) (Object) v))
+                    .create(Keys.PREVIOUS_GAME_MODE)
+                        .get(h -> (GameMode) (Object) h.gameMode.getPreviousGameModeForPlayer())
                     .create(Keys.SKIN_PROFILE_PROPERTY)
                         .get(h -> {
                             final Collection<Property> properties = h.getGameProfile().getProperties().get(ProfileProperty.TEXTURES);
@@ -95,18 +97,15 @@ public final class ServerPlayerData {
                         .get(ServerPlayerBridge::bridge$getLanguage)
                     .create(Keys.HEALTH_SCALE)
                         .get(ServerPlayerEntityHealthScaleBridge::bridge$getHealthScale)
-                        .setAnd((h, v) -> {
-                            if (v < 1f || v > Float.MAX_VALUE) {
-                                return false;
-                            }
-                            h.bridge$setHealthScale(v);
-                            return true;
-                        })
-                        .delete(b -> b.bridge$setHealthScale(null))
+                        .setAnd(ServerPlayerEntityHealthScaleBridge::bridge$setHealthScale)
+                        .delete(ServerPlayerEntityHealthScaleBridge::bridge$resetHealthScale)
                     .create(Keys.VIEW_DISTANCE)
                         .get(ServerPlayerBridge::bridge$getViewDistance)
                     .create(Keys.SKIN_PARTS)
-                        .get(ServerPlayerBridge::bridge$getSkinParts);
+                        .get(ServerPlayerBridge::bridge$getSkinParts)
+                    .create(Keys.IS_SLEEPING_IGNORED)
+                        .get(ServerPlayerBridge::bridge$sleepingIgnored)
+                        .set(ServerPlayerBridge::bridge$setSleepingIgnored);
 
         registrator.spongeDataStore(Keys.HEALTH_SCALE.key(), ServerPlayerEntityHealthScaleBridge.class, Keys.HEALTH_SCALE);
         SpongeDataManager.INSTANCE.registerLegacySpongeData(Constants.Sponge.Entity.Player.HEALTH_SCALE, Keys.HEALTH_SCALE.key(), Keys.HEALTH_SCALE);

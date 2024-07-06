@@ -62,9 +62,9 @@ import org.spongepowered.common.bridge.world.level.storage.PrimaryLevelDataBridg
 import org.spongepowered.common.data.fixer.SpongeDataCodec;
 import org.spongepowered.common.serialization.EnumCodec;
 import org.spongepowered.common.serialization.MathCodecs;
+import org.spongepowered.common.server.BootstrapProperties;
 import org.spongepowered.common.util.AbstractResourceKeyedBuilder;
 import org.spongepowered.common.util.MissingImplementationException;
-import org.spongepowered.common.server.BootstrapProperties;
 import org.spongepowered.math.vector.Vector3i;
 
 import java.util.Objects;
@@ -157,7 +157,7 @@ public final class SpongeWorldTemplate extends AbstractResourceKeyed implements 
         this.displayName = templateBridge.bridge$displayName().orElse(null);
         this.worldType = ((WorldType) template.type()).asDefaultedReference(RegistryTypes.WORLD_TYPE);
         this.generator = (ChunkGenerator) template.generator();
-        this.generationConfig = WorldGenerationConfig.Mutable.builder().from((WorldGenerationConfig.Mutable) BootstrapProperties.dimensionGeneratorSettings).build();
+        this.generationConfig = WorldGenerationConfig.Mutable.builder().from((WorldGenerationConfig.Mutable) BootstrapProperties.worldGenSettings).build();
         this.gameMode = templateBridge.bridge$gameMode().isPresent() ? RegistryTypes.GAME_MODE.referenced((ResourceKey) (Object) templateBridge.bridge$gameMode().get()) : null;
         this.difficulty = templateBridge.bridge$difficulty().isPresent() ? RegistryTypes.DIFFICULTY.referenced((ResourceKey) (Object) templateBridge.bridge$difficulty().get()) : null;
         this.serializationBehavior = templateBridge.bridge$serializationBehavior().orElse(null);
@@ -296,18 +296,18 @@ public final class SpongeWorldTemplate extends AbstractResourceKeyed implements 
 
     public static final class BuilderImpl extends AbstractResourceKeyedBuilder<WorldTemplate, WorldTemplate.Builder> implements WorldTemplate.Builder {
 
-        @Nullable protected Component displayName;
-        @Nullable protected RegistryReference<WorldType> worldType;
-        @Nullable protected ChunkGenerator generator;
-        @Nullable protected WorldGenerationConfig generationConfig;
-        @Nullable protected RegistryReference<GameMode> gameMode;
-        @Nullable protected RegistryReference<Difficulty> difficulty;
-        @Nullable protected SerializationBehavior serializationBehavior;
-        @Nullable protected Integer viewDistance;
-        @Nullable protected Vector3i spawnPosition;
-        @Nullable protected Boolean hardcore, pvp, commands;
+        @Nullable Component displayName;
+        @Nullable RegistryReference<WorldType> worldType;
+        @Nullable ChunkGenerator generator;
+        @Nullable WorldGenerationConfig generationConfig;
+        @Nullable RegistryReference<GameMode> gameMode;
+        @Nullable RegistryReference<Difficulty> difficulty;
+        @Nullable SerializationBehavior serializationBehavior;
+        @Nullable Integer viewDistance;
+        @Nullable Vector3i spawnPosition;
+        @Nullable Boolean hardcore, pvp, commands;
 
-        protected boolean loadOnStartup, performsSpawnLogic;
+        boolean loadOnStartup, performsSpawnLogic;
 
         @Override
         public Builder displayName(final @Nullable Component displayName) {
@@ -399,7 +399,7 @@ public final class SpongeWorldTemplate extends AbstractResourceKeyed implements 
             this.displayName = null;
             this.worldType = WorldTypes.OVERWORLD;
             this.generator = ChunkGenerator.overworld();
-            final WorldGenSettings generationSettings = BootstrapProperties.dimensionGeneratorSettings;
+            final WorldGenSettings generationSettings = BootstrapProperties.worldGenSettings;
             this.generationConfig = (WorldGenerationConfig) DimensionGeneratorSettingsAccessor.invoker$new(generationSettings.seed(),
                     generationSettings.generateFeatures(), generationSettings.generateBonusChest(),
                     new MappedRegistry<>(Registry.LEVEL_STEM_REGISTRY, Lifecycle.stable()),

@@ -37,17 +37,13 @@ import java.net.InetSocketAddress;
 import java.util.Optional;
 
 @Mixin(DedicatedServer.class)
-@Implements(@Interface(iface = Server.class, prefix = "server$"))
+@Implements(@Interface(iface = Server.class, prefix = "server$", remap = Interface.Remap.NONE))
 public abstract class DedicatedServerMixin_API extends MinecraftServerMixin_API implements Server {
 
     // @formatter:off
     @Shadow public abstract String shadow$getServerIp();
     @Shadow public abstract int shadow$getServerPort();
     // @formatter:on
-
-    public DedicatedServerMixin_API(final String name) {
-        super(name);
-    }
 
     @Override
     public Optional<InetSocketAddress> boundAddress() {

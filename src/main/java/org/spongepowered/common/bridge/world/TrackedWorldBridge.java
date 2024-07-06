@@ -24,12 +24,19 @@
  */
 package org.spongepowered.common.bridge.world;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.block.BlockSnapshot;
 import org.spongepowered.api.world.BlockChangeFlag;
 import org.spongepowered.api.world.explosion.Explosion;
 import org.spongepowered.common.block.SpongeBlockSnapshot;
 import org.spongepowered.common.bridge.server.level.ServerLevelBridge;
+import org.spongepowered.common.bridge.world.level.LevelBridge;
 import org.spongepowered.common.bridge.world.level.block.state.BlockStateBridge;
 import org.spongepowered.common.event.tracking.PhaseContext;
 import org.spongepowered.common.event.tracking.context.transaction.TransactionalCaptureSupplier;
@@ -37,16 +44,9 @@ import org.spongepowered.common.event.tracking.context.transaction.pipeline.Worl
 
 import java.util.Optional;
 import java.util.function.Function;
-import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.EntityBlock;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.LevelChunk;
 
 /**
- * A specialized {@link WorldBridge} or {@link ServerLevelBridge}
+ * A specialized {@link LevelBridge} or {@link ServerLevelBridge}
  * that has extra {@link org.spongepowered.common.event.tracking.PhaseTracker} related
  * methods that otherwise bear no other changes to the game.
  */
@@ -80,9 +80,7 @@ public interface TrackedWorldBridge {
 
     /**
      * Creates a {@link BlockSnapshot} but performs an additional {@link LevelChunk#getTileEntity(BlockPos, Chunk.CreateEntityType)}
-     * lookup if the providing {@link BlockState#getBlock()} {@code instanceof} is
-     * {@code true} for being an {@link EntityBlock} or
-     * {@link BlockStateBridge#bridge$hasTileEntity()}, and associates
+     * lookup if {@link BlockStateBridge#bridge$hasTileEntity()} is {@code true}, and associates
      * the resulting snapshot of said Tile with the snapshot. This is useful for in-progress
      * snapshot creation during transaction building for {@link TransactionalCaptureSupplier}.
      *

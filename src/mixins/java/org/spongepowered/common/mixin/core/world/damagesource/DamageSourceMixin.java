@@ -25,6 +25,13 @@
 package org.spongepowered.common.mixin.core.world.damagesource;
 
 import com.google.common.base.MoreObjects;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TranslatableComponent;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.IndirectEntityDamageSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.Explosion;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.event.cause.entity.damage.DamageType;
@@ -41,21 +48,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.common.accessor.world.level.ExplosionAccessor;
 import org.spongepowered.common.bridge.CreatorTrackedBridge;
 import org.spongepowered.common.bridge.world.damagesource.DamageSourceBridge;
-import org.spongepowered.common.bridge.world.WorldBridge;
+import org.spongepowered.common.bridge.world.level.LevelBridge;
 import org.spongepowered.common.registry.provider.DamageSourceToTypeProvider;
 import org.spongepowered.common.util.MemoizedSupplier;
 
 import java.util.function.Supplier;
 
 import javax.annotation.Nullable;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.TranslatableComponent;
-import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.damagesource.IndirectEntityDamageSource;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Explosion;
 
 @Mixin(DamageSource.class)
 public abstract class DamageSourceMixin implements DamageSourceBridge {
@@ -96,15 +95,14 @@ public abstract class DamageSourceMixin implements DamageSourceBridge {
             final CallbackInfoReturnable<net.minecraft.world.damagesource.DamageSource> cir) {
         if (explosion != null) {
             final Entity entity = ((ExplosionAccessor) explosion).accessor$source();
-            if (entity != null && !((WorldBridge) ((ExplosionAccessor) explosion).accessor$level()).bridge$isFake()) {
+            if (entity != null && !((LevelBridge) ((ExplosionAccessor) explosion).accessor$level()).bridge$isFake()) {
                 if (explosion.getSourceMob() == null && entity instanceof CreatorTrackedBridge) {
                     // check creator
                     final CreatorTrackedBridge creatorBridge = (CreatorTrackedBridge) entity;
-                    creatorBridge.tracked$getCreatorReference()
-                            .filter(user -> user instanceof Player)
-                            .map(user -> (Player) user)
+                    creatorBridge.tracker$getCreatorUUID()
+                            .flatMap(x -> Sponge.server().player(x))
                             .ifPresent(player -> {
-                                final IndirectEntityDamageSource damageSource = new IndirectEntityDamageSource("explosion.player", entity, player);
+                                final IndirectEntityDamageSource damageSource = new IndirectEntityDamageSource("explosion.player", entity, (Entity) player);
                                 damageSource.setScalesWithDifficulty().setExplosion();
                                 cir.setReturnValue(damageSource);
                             });
@@ -123,7 +121,7 @@ public abstract class DamageSourceMixin implements DamageSourceBridge {
         if (!this.msgId.contains(":")) {
             this.impl$damageType = MemoizedSupplier.memoize(() -> DamageSourceToTypeProvider.INSTANCE.getOrCustom(this.msgId).get());
         } else {
-            this.impl$damageType = MemoizedSupplier.memoize(() -> Sponge.game().registries().registry(RegistryTypes.DAMAGE_TYPE).findValue(ResourceKey.resolve(this.msgId)).orElseGet(DamageTypes.CUSTOM));
+            this.impl$damageType = MemoizedSupplier.memoize(() -> Sponge.game().registry(RegistryTypes.DAMAGE_TYPE).findValue(ResourceKey.resolve(this.msgId)).orElseGet(DamageTypes.CUSTOM));
         }
     }
 
@@ -164,7 +162,7 @@ public abstract class DamageSourceMixin implements DamageSourceBridge {
 
     @Override
     public String toString() {
-        final ResourceKey resourceKey = Sponge.game().registries().registry(RegistryTypes.DAMAGE_TYPE).valueKey(this.impl$damageType.get());
+        final ResourceKey resourceKey = Sponge.game().registry(RegistryTypes.DAMAGE_TYPE).valueKey(this.impl$damageType.get());
         return MoreObjects.toStringHelper("DamageSource")
                 .add("Name", this.msgId)
                 .add("Key", resourceKey)

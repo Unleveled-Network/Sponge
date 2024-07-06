@@ -24,6 +24,7 @@
  */
 package org.spongepowered.common.mixin.api.minecraft.world.level;
 
+import com.google.common.collect.ImmutableList;
 import net.minecraft.world.level.EntityGetter;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.living.player.Player;
@@ -35,13 +36,14 @@ import org.spongepowered.common.util.VecHelper;
 import org.spongepowered.common.world.volume.VolumeStreamUtils;
 import org.spongepowered.math.vector.Vector3i;
 
-import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
+
+import javax.annotation.Nullable;
 
 @Mixin(EntityGetter.class)
 public interface EntityGetterMixin_API extends EntityVolume {
@@ -50,31 +52,27 @@ public interface EntityGetterMixin_API extends EntityVolume {
     @Shadow List<net.minecraft.world.entity.Entity> shadow$getEntities(@Nullable net.minecraft.world.entity.Entity p_175674_1_, net.minecraft.world.phys.AABB p_175674_2_, @Nullable Predicate<? super net.minecraft.world.entity.Entity> p_175674_3_);
     @Shadow<T extends net.minecraft.world.entity.Entity> List<T> shadow$getEntitiesOfClass(Class<? extends T> p_175647_1_, net.minecraft.world.phys.AABB p_175647_2_, @Nullable Predicate<? super T> p_175647_3_);
     @Shadow List<? extends net.minecraft.world.entity.player.Player> shadow$players();
+    @Shadow List<net.minecraft.world.entity.Entity> shadow$getEntities(@Nullable net.minecraft.world.entity.Entity param0, net.minecraft.world.phys.AABB param1);
     //@formatter:on
 
     @Override
-    default Vector3i blockMin() {
-        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of IEntityReader that isn't part of Sponge API");
+    default Vector3i min() {
+        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of EntityGetter that isn't part of Sponge API");
     }
 
     @Override
-    default Vector3i blockMax() {
-        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of IEntityReader that isn't part of Sponge API");
+    default Vector3i max() {
+        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of EntityGetter that isn't part of Sponge API");
     }
 
     @Override
-    default Vector3i blockSize() {
-        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of IEntityReader that isn't part of Sponge API");
-    }
-
-    @Override
-    default boolean containsBlock(final int x, final int y, final int z) {
-        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of IEntityReader that isn't part of Sponge API");
+    default boolean contains(final int x, final int y, final int z) {
+        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of EntityGetter that isn't part of Sponge API");
     }
 
     @Override
     default boolean isAreaAvailable(final int x, final int y, final int z) {
-        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of IEntityReader that isn't part of Sponge API");
+        throw new UnsupportedOperationException("Unfortunately, you've found an extended class of EntityGetter that isn't part of Sponge API");
     }
 
     @Override
@@ -86,6 +84,11 @@ public interface EntityGetterMixin_API extends EntityVolume {
     @Override
     default Collection<? extends Player> players() {
         return Collections.unmodifiableCollection((List<? extends Player>) (List<?>) this.shadow$players());
+    }
+
+    @Override
+    default Collection<? extends Entity> entities() {
+        return (Collection<? extends Entity>) (Object) ImmutableList.copyOf(this.shadow$getEntities(null, VecHelper.toMinecraftAABB(AABB.of(this.min(), this.max()))));
     }
 
     @SuppressWarnings(value = {"unchecked", "rawtypes"})

@@ -25,7 +25,6 @@
 package org.spongepowered.common.mixin.core.server.level;
 
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
@@ -40,7 +39,7 @@ import org.spongepowered.api.event.SpongeEventFactory;
 import org.spongepowered.api.event.world.chunk.ChunkEvent;
 import org.spongepowered.api.util.Direction;
 import org.spongepowered.api.world.SerializationBehavior;
-import org.spongepowered.api.world.chunk.Chunk;
+import org.spongepowered.api.world.chunk.WorldChunk;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -48,11 +47,14 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.Slice;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.common.SpongeCommon;
 import org.spongepowered.common.accessor.server.level.ServerChunkCacheAccessor;
+import org.spongepowered.common.accessor.world.level.chunk.storage.ChunkStorageAccessor;
 import org.spongepowered.common.bridge.world.DistanceManagerBridge;
 import org.spongepowered.common.bridge.world.level.chunk.LevelChunkBridge;
+import org.spongepowered.common.bridge.world.level.chunk.storage.IOWorkerBridge;
 import org.spongepowered.common.bridge.world.level.storage.PrimaryLevelDataBridge;
 import org.spongepowered.common.bridge.world.server.ChunkMapBridge;
 import org.spongepowered.common.event.ShouldFire;
@@ -72,6 +74,11 @@ public abstract class ChunkMapMixin implements ChunkMapBridge {
         // The ticket manager on this object is a package-private class and isn't accessible from here
         // - @Shadow doesn't work because it seems to need the exact type.
         return (DistanceManagerBridge) ((ServerChunkCacheAccessor) this.level.getChunkSource()).accessor$distanceManager();
+    }
+
+    @Inject(method = "<init>", at = @At("RETURN"))
+    private void impl$setIOWorkerDimension(final CallbackInfo ci) {
+        ((IOWorkerBridge) ((ChunkStorageAccessor) this).accessor$worker()).bridge$setDimension(this.level.dimension());
     }
 
     @Redirect(method = "save",
@@ -107,65 +114,47 @@ public abstract class ChunkMapMixin implements ChunkMapBridge {
         chunkManager.write(pos, compound);
     }
 
-    @Redirect(method = "*",
+    @Redirect(method = "lambda$scheduleUnload$10",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;unload(Lnet/minecraft/world/level/chunk/LevelChunk;)V"),
             slice = @Slice(
                     from = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ChunkMap;save(Lnet/minecraft/world/level/chunk/ChunkAccess;)Z")
             )
     )
     private void impl$onSetUnloaded(final ServerLevel level, final LevelChunk chunk) {
-        level.unload(chunk);
         final Vector3i chunkPos = new Vector3i(chunk.getPos().x, 0, chunk.getPos().z);
-        if (ShouldFire.CHUNK_EVENT_UNLOAD) {
-            final ChunkEvent.Unload event = SpongeEventFactory.createChunkEventUnload(PhaseTracker.getInstance().currentCause(), chunkPos,
-                    (ResourceKey) (Object) this.level.dimension().location());
+
+        if (ShouldFire.CHUNK_EVENT_UNLOAD_PRE) {
+            final ChunkEvent.Unload event = SpongeEventFactory.createChunkEventUnloadPre(PhaseTracker.getInstance().currentCause(),
+                (WorldChunk) chunk, chunkPos, (ResourceKey) (Object) this.level.dimension().location());
             SpongeCommon.post(event);
         }
 
+        level.unload(chunk);
+
         for (final Direction dir : Constants.Chunk.CARDINAL_DIRECTIONS) {
-            final Vector3i neighborPos = chunkPos.add(dir.asBlockOffset());
-            final ChunkAccess neighbor = this.level.getChunk(neighborPos.x(), neighborPos.z(), ChunkStatus.EMPTY, false);
-            if (neighbor instanceof LevelChunk) {
-                final int index = DirectionUtil.directionToIndex(dir);
+            final int index = DirectionUtil.directionToIndex(dir);
+            final LevelChunk neighbor = ((LevelChunkBridge) chunk).bridge$getNeighborChunk(index);
+            if (neighbor != null) {
                 final int oppositeIndex = DirectionUtil.directionToIndex(dir.opposite());
                 ((LevelChunkBridge) chunk).bridge$setNeighborChunk(index, null);
                 ((LevelChunkBridge) neighbor).bridge$setNeighborChunk(oppositeIndex, null);
             }
         }
-    }
 
-    @Redirect(method = "*",
-            at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/server/level/ChunkHolder;replaceProtoChunk(Lnet/minecraft/world/level/chunk/ImposterProtoChunk;)V")
-    )
-    private void impl$onReplaceProto(final ChunkHolder holder, final ImposterProtoChunk chunk) {
-        holder.replaceProtoChunk(chunk);
-        if (ShouldFire.CHUNK_EVENT_GENERATED) {
-            final Vector3i chunkPos = new Vector3i(chunk.getPos().x, 0, chunk.getPos().z);
-            final ChunkEvent.Generated event = SpongeEventFactory.createChunkEventGenerated(PhaseTracker.getInstance().currentCause(), chunkPos,
-                    (ResourceKey) (Object) this.level.dimension().location());
+        if (ShouldFire.CHUNK_EVENT_UNLOAD_POST) {
+            final ChunkEvent.Unload event = SpongeEventFactory.createChunkEventUnloadPost(PhaseTracker.getInstance().currentCause(), chunkPos,
+                (ResourceKey) (Object) this.level.dimension().location());
             SpongeCommon.post(event);
         }
     }
 
-    @Inject(method = "save", at = @At(value = "RETURN"))
-    private void impl$onSaved(final ChunkAccess var1, final CallbackInfoReturnable<Boolean> cir) {
-        if (ShouldFire.CHUNK_EVENT_SAVE_POST) {
-            final Vector3i chunkPos = new Vector3i(var1.getPos().x, 0, var1.getPos().z);
-            final ChunkEvent.Save.Post postSave = SpongeEventFactory.createChunkEventSavePost(PhaseTracker.getInstance().currentCause(), chunkPos,
-                    (ResourceKey) (Object) this.level.dimension().location());
-            SpongeCommon.post(postSave);
-        }
-
-    }
-
     @Inject(method = "save", at = @At(value = "HEAD"), cancellable = true)
     private void impl$onSave(final ChunkAccess var1, final CallbackInfoReturnable<Boolean> cir) {
-        if (var1 instanceof Chunk) {
+        if (var1 instanceof WorldChunk) {
             if (ShouldFire.CHUNK_EVENT_SAVE_PRE) {
                 final Vector3i chunkPos = new Vector3i(var1.getPos().x, 0, var1.getPos().z);
                 final ChunkEvent.Save.Pre postSave = SpongeEventFactory.createChunkEventSavePre(PhaseTracker.getInstance().currentCause(),
-                        chunkPos, (ResourceKey) (Object) this.level.dimension().location(), ((Chunk) var1));
+                    ((WorldChunk) var1), chunkPos, (ResourceKey) (Object) this.level.dimension().location());
                 SpongeCommon.post(postSave);
                 if (postSave.isCancelled()) {
                     cir.setReturnValue(false);
@@ -177,7 +166,7 @@ public abstract class ChunkMapMixin implements ChunkMapBridge {
     @Redirect(method = "*",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/chunk/LevelChunk;setLoaded(Z)V"),
             slice = @Slice(
-                    from = @At(value = "INVOKE", target = "Lit/unimi/dsi/fastutil/longs/LongSet;add(J)Z"),
+                    from = @At(value = "INVOKE", remap = false, target = "Lit/unimi/dsi/fastutil/longs/LongSet;add(J)Z"),
                     to = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;addAllPendingBlockEntities(Ljava/util/Collection;)V")
             )
     )
@@ -186,7 +175,7 @@ public abstract class ChunkMapMixin implements ChunkMapBridge {
         final Vector3i chunkPos = new Vector3i(levelChunk.getPos().x, 0, levelChunk.getPos().z);
         if (ShouldFire.CHUNK_EVENT_LOAD) {
             final ChunkEvent.Load loadEvent = SpongeEventFactory.createChunkEventLoad(PhaseTracker.getInstance().currentCause(),
-                    chunkPos, (ResourceKey) (Object) this.level.dimension().location(), ((Chunk) levelChunk));
+                ((WorldChunk) levelChunk), chunkPos, (ResourceKey) (Object) this.level.dimension().location());
             SpongeCommon.post(loadEvent);
         }
 

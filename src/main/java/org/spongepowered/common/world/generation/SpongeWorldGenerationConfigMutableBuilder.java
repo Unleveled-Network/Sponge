@@ -25,15 +25,16 @@
 package org.spongepowered.common.world.generation;
 
 import com.mojang.serialization.Lifecycle;
-import org.spongepowered.api.world.generation.config.WorldGenerationConfig;
-import org.spongepowered.common.accessor.world.gen.DimensionGeneratorSettingsAccessor;
-import org.spongepowered.common.server.BootstrapProperties;
-
-import java.util.Objects;
-import java.util.Optional;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.world.level.levelgen.WorldGenSettings;
+import org.spongepowered.api.world.generation.config.WorldGenerationConfig;
+import org.spongepowered.common.accessor.world.gen.DimensionGeneratorSettingsAccessor;
+import org.spongepowered.common.server.BootstrapProperties;
+import org.spongepowered.common.util.SeedUtil;
+
+import java.util.Objects;
+import java.util.Optional;
 
 public final class SpongeWorldGenerationConfigMutableBuilder implements WorldGenerationConfig.Mutable.Builder {
 
@@ -44,6 +45,11 @@ public final class SpongeWorldGenerationConfigMutableBuilder implements WorldGen
     public WorldGenerationConfig.Mutable.Builder seed(final long seed) {
         this.seed = seed;
         return this;
+    }
+
+    @Override
+    public void seed(final String seed) {
+        this.seed = SeedUtil.compute(seed);
     }
 
     @Override
@@ -60,7 +66,7 @@ public final class SpongeWorldGenerationConfigMutableBuilder implements WorldGen
 
     @Override
     public WorldGenerationConfig.Mutable.Builder reset() {
-        final WorldGenSettings defaultSettings = BootstrapProperties.dimensionGeneratorSettings;
+        final WorldGenSettings defaultSettings = BootstrapProperties.worldGenSettings;
         this.seed = defaultSettings.seed();
         this.generateFeatures = defaultSettings.generateFeatures();
         this.generateBonusChest = defaultSettings.generateBonusChest();

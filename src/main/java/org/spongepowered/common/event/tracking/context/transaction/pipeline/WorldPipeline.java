@@ -24,8 +24,16 @@
  */
 package org.spongepowered.common.event.tracking.context.transaction.pipeline;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.spongepowered.common.bridge.world.level.block.state.BlockStateBridge;
 import org.spongepowered.common.event.tracking.PhaseContext;
 import org.spongepowered.common.event.tracking.context.transaction.EffectTransactor;
 import org.spongepowered.common.event.tracking.context.transaction.ResultingTransactionBySideEffect;
@@ -38,13 +46,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
-import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.chunk.LevelChunkSection;
 
 public final class WorldPipeline implements BlockPipeline {
 
@@ -98,8 +99,9 @@ public final class WorldPipeline implements BlockPipeline {
         if (oldState == null) {
             return false;
         }
+        final int oldLight = ((BlockStateBridge) oldState).bridge$getLightValue(serverWorld, pos);
         final int oldOpacity = oldState.getLightBlock(serverWorld, pos);
-        PipelineCursor formerState = new PipelineCursor(oldState, oldOpacity, pos, existing, destroyer, limit);
+        PipelineCursor formerState = new PipelineCursor(oldState, oldLight, oldOpacity, pos, existing, destroyer, limit);
 
         for (final ResultingTransactionBySideEffect effect : this.worldEffects) {
             try (final EffectTransactor ignored = context.getTransactor().pushEffect(effect)) {
@@ -114,7 +116,7 @@ public final class WorldPipeline implements BlockPipeline {
                     return result.resultingState != null;
                 }
                 if (formerState.drops.isEmpty() && !result.drops.isEmpty()) {
-                    formerState = new PipelineCursor(oldState, oldOpacity, pos, existing, formerState.destroyer, result.drops, limit);
+                    formerState = new PipelineCursor(oldState, oldLight, oldOpacity, pos, existing, formerState.destroyer, result.drops, limit);
                 }
             }
         }
